@@ -1,0 +1,39 @@
+Firefox
+
+1 of 1
+
+https://molins.cpd.ua.es/tfc/alumnos/preferenciasSortable.php
+
+Consulta de propuesta
+Curso académico 2025-26
+Plan de estudios GRADO EN INGENIERÍA ROBÓTICA
+Asignatura TRABAJO FIN DE GRADO
+
+Datos del Trabajo Final de estudios
+Título del trabajo * Detección y seguimiento de objetos mediante drones
+Resumen *
+Este proyecto �ene como obje�vo desarrollar un sistema embarcado en drones capaz de detectar y seguir objetos en movimiento en �empo real, u�lizando técnicas de visión
+por computador e inteligencia ar�ﬁcial. Se abordarán aspectos como la captura y procesamiento de imágenes a bordo, el uso de redes neuronales para el reconocimiento y
+localización de objetos, y la implementación de algoritmos de control de vuelo autónomo para mantener el seguimiento del obje�vo. Las aplicaciones pueden ir desde la
+vigilancia y el rescate hasta el seguimiento de animales o vehículos.
+Obje�vos concretos
+Metodología a emplear
+Relación con asignaturas cursadas y/o i�nerario relacionado
+Bibliogra�a o fuentes de información
+¿Es necesario el informe del Comité de É�ca de la Inves�gación de la UA?
+No
+
+COORDINADOR/A de esta propuesta
+Nombre Miguel Ángel Cazorla Quevedo
+Dpto B161 CIENCIA DE LA COMPUTACION E INT. ARTIF.
+E-mail miguel.cazorla@ua.es
+
+TUTORES de esta propuesta
+Francisco Gómez Donoso - fgomez@ua.es
+
+Cues�ones sobre los estudiantes
+Recomendación :
+
+1/27/26, 13:46
+
+

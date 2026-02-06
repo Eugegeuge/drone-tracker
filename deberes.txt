@@ -1,0 +1,13 @@
+# Lista de Cosas Hechas
+
+## Tareas Completadas
+- [x] Descargarse la API del drone y ver cómo se usa
+- [x] Poner en marcha un detector de objetos sencillo, tipo yolo (ultralytics)
+- [x] Hacer un pequeño programa que detecte una persona y dé ordenes de movimiento al drone para "centrar" la persona en la imagen
+
+## Deberes / Tareas Pendientes
+
+## Notas
+- Dron: DJI Tello
+- De momento, no hay drone, por lo que podrías usar una webcam como feed de video.
+- Al volver de vacaciones cuadramos las reuniones.
