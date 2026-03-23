@@ -6,6 +6,9 @@
 - [x] Hacer un pequeño programa que detecte una persona y dé ordenes de movimiento al drone para "centrar" la persona en la imagen
 
 ## Deberes / Tareas Pendientes
+- [ ] Implementar controlador PID (Proporcional-Integral-Derivativo) para movimientos más suaves.
+- [ ] Añadir suavizado de señal (filtro de media exponencial) para evitar vibraciones en la detección.
+- [ ] Crear máquina de estados (Buscando vs Siguiendo) y failsafes (batería baja, pérdida de objetivo).
 
 ## Notas
 - Dron: DJI Tello

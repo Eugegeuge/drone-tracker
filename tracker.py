@@ -7,37 +7,8 @@ import numpy as np
 USE_MOCK = True  # Set to False to use real Tello
 
 if USE_MOCK:
-    class MockDrone:
-        def __init__(self):
-            print("[MockDrone] Initialized")
-            self.is_flying = False
-            self.battery = 100
-
-        def connect(self):
-            print("[MockDrone] Connected")
-
-        def takeoff(self):
-            print("[MockDrone] Takeoff!")
-            self.is_flying = True
-
-        def land(self):
-            print("[MockDrone] Landing!")
-            self.is_flying = False
-
-        def send_rc_control(self, lr, fb, ud, yv):
-            # Log command if it's non-zero
-            if lr != 0 or fb != 0 or ud != 0 or yv != 0:
-                print(f"[CMD] LR: {lr}, FB: {fb}, UD: {ud}, YAW: {yv}")
-
-        def get_battery(self):
-            return self.battery
-            
-        def streamon(self):
-             pass
-        def streamoff(self):
-             pass
-
-    Tello = MockDrone
+    from mock_tello import MockTello
+    Tello = MockTello
 else:
     from djitellopy import Tello
 
@@ -57,13 +28,19 @@ class DroneController:
         # También verifica que haya conexión WiFi con el dron.
         self.drone.connect()
         
-        # 3. Initialize Webcam
-        # We ALWAYS use webcam for this version as requested
-        print("Opening Webcam...")
-        self.cap = cv2.VideoCapture(0)
-        if not self.cap.isOpened():
-            print("Error: Could not open webcam.")
-            return
+        # 3. Initialize Video Feed
+        if USE_MOCK:
+            print("Using Simulator Feed...")
+            self.drone.streamon()
+            self.frame_reader = self.drone.get_frame_read()
+            self.cap = None
+        else:
+            print("Opening Webcam...")
+            self.cap = cv2.VideoCapture(0)
+            if not self.cap.isOpened():
+                print("Error: Could not open webcam.")
+                return
+            self.frame_reader = None
 
         # Control Parameters
         self.center_threshold = 50  # Pixels from center to trigger movement
@@ -170,10 +147,21 @@ class DroneController:
         print("Controls: 't' Takeoff, 'l' Land, 'q' Quit")
         
         while True:
-            ret, frame = self.cap.read()
-            if not ret:
-                print("Failed to grab frame")
-                break
+            # Get Frame
+            if USE_MOCK:
+                frame = self.frame_reader.get_frame()
+                if frame is None:
+                    time.sleep(0.01)
+                    continue
+                # For simulation, we can also see the global map for debugging
+                map_frame = self.drone.get_map_draw()
+                if map_frame is not None:
+                    cv2.imshow("Global Map (Debug)", map_frame)
+            else:
+                ret, frame = self.cap.read()
+                if not ret:
+                    print("Failed to grab frame")
+                    break
                 
             processed_frame = self.process_frame(frame)
             cv2.imshow("Webcam Tracker", processed_frame)
@@ -194,7 +182,10 @@ class DroneController:
                 self.drone.land()
                 self.is_flying = False
                 
-        self.cap.release()
+        if self.cap:
+            self.cap.release()
+        else:
+            self.drone.streamoff()
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":

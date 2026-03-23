@@ -3,6 +3,11 @@ import cv2
 import threading
 import numpy as np
 import math
+import os
+
+# Get the directory where this script is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSETS_DIR = os.path.join(BASE_DIR, 'assets')
 
 class MockTello:
     def __init__(self):
@@ -16,16 +21,19 @@ class MockTello:
         self.z = 100.0  # Height
         self.yaw = 0.0  # Degrees
         
-        # Velocities
-        self.vx = 0.0
-        self.vy = 0.0
-        self.vz = 0.0
-        self.vyaw = 0.0
-        
+        # Physics Constants
+        self.drag = 0.1  # Drag coefficient (0-1)
+        self.accel_factor = 30.0 # Force applied by RC commands
+        self.max_physics_speed = 150.0
+
         # Simulation thread
         self.sim_running = True
         self.last_time = time.time()
         self.lock = threading.Lock()
+        
+        # New: Target movement params
+        self.auto_person_move = True
+        self.person_theta = 0.0 # For circular movement
         
         self.sim_thread = threading.Thread(target=self.update_physics)
         self.sim_thread.daemon = True
@@ -65,10 +73,11 @@ class MockTello:
         
     def send_rc_control(self, left_right_velocity, forward_backward_velocity, up_down_velocity, yaw_velocity):
         with self.lock:
-            self.vx = left_right_velocity * 2.0 
-            self.vy = forward_backward_velocity * 2.0
-            self.vz = up_down_velocity * 1.0
-            self.vyaw = yaw_velocity * 1.0 
+            # We treat these as "Target Forces" or "Thrust"
+            self.target_vx = left_right_velocity * self.accel_factor
+            self.target_vy = forward_backward_velocity * self.accel_factor
+            self.target_vz = up_down_velocity * 0.5
+            self.vyaw = yaw_velocity * 2.0 
         
     def get_battery(self):
         return self.battery
@@ -90,9 +99,21 @@ class MockTello:
             
             if self.is_flying:
                 with self.lock:
+                    # 1. Update Rotation
                     self.yaw += self.vyaw * dt
                     self.yaw %= 360
                     
+                    # 2. Apply Acceleration & Drag (Simple Euler)
+                    # accel = (Thrust - Drag * velocity)
+                    self.vx += (self.target_vx - self.vx * self.drag) * dt
+                    self.vy += (self.target_vy - self.vy * self.drag) * dt
+                    self.vz += (self.target_vz - self.vz * self.drag) * dt
+                    
+                    # Clamp max speed
+                    self.vx = max(-self.max_physics_speed, min(self.max_physics_speed, self.vx))
+                    self.vy = max(-self.max_physics_speed, min(self.max_physics_speed, self.vy))
+                    
+                    # 3. Translate Position
                     rad_yaw = math.radians(self.yaw)
                     c = math.cos(rad_yaw)
                     s = math.sin(rad_yaw)
@@ -106,19 +127,31 @@ class MockTello:
                     
                     self.x = max(0, min(2000, self.x))
                     self.y = max(0, min(2000, self.y))
+
+                    # 4. Update Autonomous Person Movement
+                    if self.auto_person_move:
+                        self.person_theta += 0.5 * dt # Speed of circle
+                        radius = 400
+                        px = 1000 + radius * math.cos(self.person_theta)
+                        py = 1000 + radius * math.sin(self.person_theta * 0.7) # Figure 8 ish
+                        self.set_person_pos(px, py)
                     
-            time.sleep(0.02) 
+            time.sleep(0.01) # Higher frequency for physics
+
+from collections import deque
 
 class MockFrameReader:
     def __init__(self, drone):
         self.drone = drone
-        self.frame = None
+        self.latest_frame = None
+        self.frame_buffer = deque()
+        self.latency_seconds = 0.2 # 200ms default latency (characteristic of Tello WiFi)
         self.stopped = False
         self.lock = threading.Lock()
         
         # Load Assets
-        self.background = cv2.imread('assets/background.png')
-        self.person = cv2.imread('assets/person.png')
+        self.background = cv2.imread(os.path.join(ASSETS_DIR, 'background.png'))
+        self.person = cv2.imread(os.path.join(ASSETS_DIR, 'person.png'))
         
         if self.person is not None:
             self.person = cv2.resize(self.person, (200, 200)) 
@@ -193,131 +226,81 @@ class MockFrameReader:
     def update(self):
         while not self.stopped:
             with self.lock:
-                # 1. Generate Ground View (Rotated Map)
-                view_width = 640
-                view_height = 480
-                scale = 1.0
+                # [Same image generation logic as before...]
+                # [Skipping repeat to keep chunk small, just updating how we store it]
+                new_frame = self.generate_synthetic_frame() 
                 
-                cx, cy = int(self.drone.x), int(self.drone.y)
+                # Timestamp the frame and add to buffer
+                self.frame_buffer.append((time.time(), new_frame))
                 
-                # Rotate background map around drone
-                # Note: If drone yaws right (positive), the world rotates left (negative) relative to camera
-                M = cv2.getRotationMatrix2D((cx, cy), self.drone.yaw, scale)
-                
-                # Warp the background only (no person yet)
-                rotated_map = cv2.warpAffine(self.background, M, (self.background.shape[1], self.background.shape[0]))
-                
-                x1 = cx - view_width // 2
-                y1 = cy - view_height // 2
-                x2 = x1 + view_width
-                y2 = y1 + view_height
-                
-                # Crop camera view
-                try:
-                    if x1 < 0 or y1 < 0 or x2 > rotated_map.shape[1] or y2 > rotated_map.shape[0]:
-                         self.frame = np.zeros((view_height, view_width, 3), dtype=np.uint8)
-                    else:
-                        self.frame = rotated_map[y1:y2, x1:x2]
-                except:
-                    self.frame = np.zeros((view_height, view_width, 3), dtype=np.uint8)
-
-                # 2. Render Person (Billboard Style - Always Upright)
-                # Calculate person position relative to drone
-                px, py = self.person_pos
-                dx, dy = self.drone.x, self.drone.y
-                
-                # Vector from drone to person
-                vx = px - dx
-                vy = py - dy
-                
-                # Rotate vector by -yaw to get local camera coordinates
-                # Global: +x Right, +y Down
-                # Camera: +x Right, +y Down (but Forward is Up in map? No, Forward is -y in map)
-                # Let's stick to map coords:
-                # Drone Heading is `yaw`. 0 is North (-y).
-                # We want to project (vx, vy) onto the Drone's Right/Forward axes.
-                
-                rad_yaw = math.radians(self.drone.yaw)
-                c = math.cos(rad_yaw)
-                s = math.sin(rad_yaw)
-                
-                # Local X (Right):  vx * cos(yaw) + vy * sin(yaw)
-                # Local Y (Forward): -vx * sin(yaw) + vy * cos(yaw)  <-- Wait, let's verify
-                # If yaw=0 (North): Right=(1,0), Forward=(0,-1).
-                # local_x = vx*1 + vy*0 = vx. Correct.
-                # local_y = -vx*0 + vy*1 = vy. (So +y is Down/Back). 
-                # Camera view: Top of screen is Forward. Bottom is Back.
-                # So screen_y should be related to -local_y.
-                
-                local_x = (vx * c) + (vy * s)
-                local_y = (-vx * s) + (vy * c) # This is "Map Y" relative to drone. + is Down/Back. - is Up/Forward.
-                
-                # Convert to Screen Coordinates
-                # Center of screen is (view_width/2, view_height/2) which corresponds to (0,0) local
-                screen_cx = view_width // 2
-                screen_cy = view_height // 2
-                
-                dest_x = int(screen_cx + local_x)
-                dest_y = int(screen_cy + local_y)
-                
-                # Check if person is roughly in front/visible
-                # local_y is "Map Y". Forward is negative.
-                # So if local_y is negative, person is in front.
-                # if local_y is positive, person is behind.
-                
-                # Calculate distance for perspective scaling
-                # local_y is "Map Y" relative to drone. + is Down/Back. - is Up/Forward.
-                # Distance is roughly abs(local_y) if centered, or sqrt(local_x^2 + local_y^2)
-                dist = math.sqrt(local_x**2 + local_y**2)
-                
-                # Avoid division by zero
-                if dist < 10: dist = 10
-                
-                # Perspective projection: size = base_size * (focal_length / distance)
-                focal_length = 400.0 # Adjust for FOV
-                scale_factor = focal_length / dist
-                
-                # Base size of person in world units (pixels in map)
-                # Let's say person is 100 units tall in map
-                base_h = 100
-                
-                # Calculate dimensions preserving aspect ratio
-                ph, pw, _ = self.person.shape
-                aspect_ratio = pw / ph
-                
-                draw_h = int(base_h * scale_factor)
-                draw_w = int(draw_h * aspect_ratio)
-                
-                # Render person sprite centered at dest_x, dest_y
-                if self.person is not None and draw_w > 0 and draw_h > 0:
-                    # Resize sprite to calculated perspective size
-                    person_resized = cv2.resize(self.person, (draw_w, draw_h))
-                    
-                    ph, pw, _ = person_resized.shape
-                    # Top-left of sprite
-                    sx = dest_x - pw // 2
-                    sy = dest_y - ph // 2
-                    
-                    # Clip and Paste
-                    y1, y2 = max(0, sy), min(view_height, sy+ph)
-                    x1, x2 = max(0, sx), min(view_width, sx+pw)
-                    
-                    if y2 > y1 and x2 > x1:
-                        src_y1 = y1 - sy
-                        src_y2 = src_y1 + (y2 - y1)
-                        src_x1 = x1 - sx
-                        src_x2 = src_x1 + (x2 - x1)
-                        
-                        self.frame[y1:y2, x1:x2] = person_resized[src_y1:src_y2, src_x1:src_x2]
-
-                if self.frame is not None:
-                     cv2.putText(self.frame, f"Sim: x={int(self.drone.x)} y={int(self.drone.y)} yaw={int(self.drone.yaw)}", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 1)
+                # Cleanup old frames (keep at least 1)
+                now = time.time()
+                while len(self.frame_buffer) > 1 and (now - self.frame_buffer[0][0]) > self.latency_seconds:
+                    _, self.latest_frame = self.frame_buffer.popleft()
 
             time.sleep(0.03)
+
+    def generate_synthetic_frame(self):
+        # Move the large logic from original update() here
+        # (This is a refactor to accommodate the latency buffer)
+        view_width = 640
+        view_height = 480
+        scale = 1.0
+        
+        cx, cy = int(self.drone.x), int(self.drone.y)
+        M = cv2.getRotationMatrix2D((cx, cy), self.drone.yaw, scale)
+        rotated_map = cv2.warpAffine(self.background, M, (self.background.shape[1], self.background.shape[0]))
+        
+        x1 = cx - view_width // 2
+        y1 = cy - view_height // 2
+        x2 = x1 + view_width
+        y2 = y1 + view_height
+        
+        try:
+            if x1 < 0 or y1 < 0 or x2 > rotated_map.shape[1] or y2 > rotated_map.shape[0]:
+                 temp_frame = np.zeros((view_height, view_width, 3), dtype=np.uint8)
+            else:
+                temp_frame = rotated_map[y1:y2, x1:x2].copy()
+        except:
+            temp_frame = np.zeros((view_height, view_width, 3), dtype=np.uint8)
+
+        # Render Person
+        px, py = self.person_pos
+        dx, dy = self.drone.x, self.drone.y
+        vx, vy = px - dx, py - dy
+        rad_yaw = math.radians(self.drone.yaw)
+        c, s = math.cos(rad_yaw), math.sin(rad_yaw)
+        local_x = (vx * c) + (vy * s)
+        local_y = (-vx * s) + (vy * c)
+        
+        screen_cx, screen_cy = view_width // 2, view_height // 2
+        dest_x, dest_y = int(screen_cx + local_x), int(screen_cy + local_y)
+        dist = math.sqrt(local_x**2 + local_y**2)
+        if dist < 10: dist = 10
+        focal_length = 400.0
+        scale_factor = focal_length / dist
+        base_h = 100
+        ph, pw, _ = self.person.shape
+        aspect_ratio = pw / ph
+        draw_h, draw_w = int(base_h * scale_factor), int(base_h * scale_factor * aspect_ratio)
+        
+        if self.person is not None and draw_w > 0 and draw_h > 0:
+            person_resized = cv2.resize(self.person, (draw_w, draw_h))
+            ph, pw, _ = person_resized.shape
+            sx, sy = dest_x - pw // 2, dest_y - ph // 2
+            y1, y2 = max(0, sy), min(view_height, sy+ph)
+            x1, x2 = max(0, sx), min(view_width, sx+pw)
+            if y2 > y1 and x2 > x1:
+                src_y1, src_x1 = y1 - sy, x1 - sx
+                src_y2, src_x2 = src_y1 + (y2 - y1), src_x1 + (x2 - x1)
+                temp_frame[y1:y2, x1:x2] = person_resized[src_y1:src_y2, src_x1:src_x2]
+
+        cv2.putText(temp_frame, f"Sim Latency: {int(self.latency_seconds*1000)}ms", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 1)
+        return temp_frame
                 
     def get_frame(self):
         with self.lock:
-            return self.frame
+            return self.latest_frame
             
     def stop(self):
         self.stopped = True
