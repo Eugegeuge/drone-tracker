@@ -29,3 +29,10 @@ https://dl-cdn.ryzerobotics.com/downloads/Tello/Tello%20SDK%202.0%20User%20Guide
 
 - **Estudio Académico: Swarm Drones en Unreal Engine / AirSim**: https://www.mdpi.com/2673-4052/6/4/87
   Detalles: Paper de la revista Drones con un entorno de simulación de alta fidelidad en Unreal Engine y AirSim, integrando detección en tiempo real con YOLOv8-nano.
+
+# Otras Referencias (Tello y YOLOv5/PID)
+
+- **Visual Tracking of a Quadrotor Drone Based on YOLOv5 and PID**: https://www.mdpi.com/1996-1073/15/23/9207
+- **Person Tracking with Tello Drone using YOLOv5**: https://github.com/Matthewjsiv/Person-Tracking-Tello-Drone
+- **Real-Time Human Motion Tracking by Tello EDU Drone**: https://www.researchgate.net/publication/367093080_Real-Time_Human_Motion_Tracking_by_Tello_EDU_Drone
+- **Visual Tracking and Control of a Quadrotor Drone Based on YOLOv5 and PID Control**: https://pmc.ncbi.nlm.nih.gov/articles/PMC9860987/

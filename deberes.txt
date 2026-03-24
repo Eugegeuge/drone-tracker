@@ -13,6 +13,11 @@
 - [ ] Refinar el seguimiento en Webots (Opción A) con el PID sintonizado.
 - [ ] Añadir suavizado de señal (filtro de media exponencial) para evitar vibraciones en la detección.
 - [ ] Crear máquina de estados (Buscando vs Siguiendo) y failsafes (batería baja, pérdida de objetivo).
+- [ ] **Estudiar nuevas referencias para refinamiento PID:**
+    - Visual Tracking (PID + YOLOv5): https://www.mdpi.com/1996-1073/15/23/9207
+    - Tello Person Tracking Repo: https://github.com/Matthewjsiv/Person-Tracking-Tello-Drone
+    - Human Motion Tracking (Tello EDU): https://www.researchgate.net/publication/367093080_Real-Time_Human_Motion_Tracking_by_Tello_EDU_Drone
+    - Control de Quadrotor basado en Deep Learning: https://pmc.ncbi.nlm.nih.gov/articles/PMC9860987/
 
 ## Notas
 - Dron: DJI Tello
