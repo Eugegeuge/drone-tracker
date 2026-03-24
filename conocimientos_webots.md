@@ -30,5 +30,6 @@ Este documento resume los retos técnicos superados para lograr que el dron Mavi
 - **Lección**: El mezclador de motores del Mavic espera que los errores de Roll y Pitch se sumen o resten siguiendo el sistema de coordenadas de la IMU.
   - **Corrección**: Usar `(roll - target_roll)` y `(pitch - target_pitch)` con los signos exactos del controlador oficial en C para asegurar la estabilidad.
 
-## 6. Altura Suave
-- **Mejora**: Usar una función cúbica para el error de altura (`pow(error, 3.0)`) permite despegues más potentes y aterrizajes mucho más suaves que el PID lineal simple.
+## 7. Gestión de Teclado (Debouncing)
+- **Problema**: Al pulsar una tecla de tipo "toggle" (ej. 'T' para despegar o 'M' para auto), la acción se repite muchas veces ("spam") porque `keyboard.getKey()` devuelve la tecla en cada paso de simulación.
+- **Solución**: Implementar una lógica de estado previo. Guardar `self.last_key` y solo ejecutar la acción si la tecla actual es distinta a la anterior: `if current_key == ord('T') and current_key != self.last_key:`.

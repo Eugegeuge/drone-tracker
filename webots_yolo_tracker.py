@@ -113,6 +113,7 @@ class WebotsYOLOTracker(Robot):
         # Contadores para optimizar
         self.step_counter = 0
         self.yolo_freq = 5 # Solo ejecutar YOLO cada 5 steps para evitar lag
+        self.last_key = -1 # Para evitar spam de botones
         
         # Parámetros Tracking PID de Visión
         self.center_threshold = 30
@@ -227,19 +228,19 @@ class WebotsYOLOTracker(Robot):
             pitch_disturbance = 0.0
             yaw_disturbance = 0.0
 
-            if key != -1:
-                # Log opcional para debug: print(f"Tecla: {key}")
-                pass
-
-            if key == ord('T'): 
-                self.is_flying = not self.is_flying
-                print(f"ESTADO: {'VUELO' if self.is_flying else 'TIERRA'}")
-            elif key == ord('M'): # M para alternar AUTO
-                self.auto_mode = not self.auto_mode
-                print(f"MODO AUTO: {'ON' if self.auto_mode else 'OFF'}")
-            elif key == ord('L'):
-                self.is_flying = False
-                print("ESTADO: Aterrizaje forzado")
+            # Lógica Anti-Spam (solo toggle si la tecla ha cambiado)
+            if key != self.last_key:
+                if key == ord('T'): 
+                    self.is_flying = not self.is_flying
+                    print(f"ESTADO: {'VUELO' if self.is_flying else 'TIERRA'}")
+                elif key == ord('M'): # M para alternar AUTO
+                    self.auto_mode = not self.auto_mode
+                    print(f"MODO AUTO: {'ON' if self.auto_mode else 'OFF'}")
+                elif key == ord('L'):
+                    self.is_flying = False
+                    print("ESTADO: Aterrizaje forzado")
+                
+            self.last_key = key
 
             # Control Manual mapeado a perturbaciones (WASD + Arrows)
             if self.is_flying and not self.auto_mode:
