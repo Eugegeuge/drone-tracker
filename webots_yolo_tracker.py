@@ -63,9 +63,9 @@ class WebotsYOLOTracker(Robot):
         super().__init__()
         self.time_step = int(self.getBasicTimeStep())
         
-        # 1. Cargar YOLO
+        # 1. Cargar YOLO (Puedes probar 'yolov8s.pt' si el 'n' es poco preciso)
         print("Cargando modelo YOLOv8n...")
-        self.yolo_model = YOLO('yolov8n.pt')
+        self.yolo_model = YOLO('yolov8n.pt') 
         print("YOLO listo.")
 
         # 2. Configurar Sensores del Dron
@@ -80,6 +80,11 @@ class WebotsYOLOTracker(Robot):
         
         self.gyro = self.getDevice("gyro")
         self.gyro.enable(self.time_step)
+        
+        # Gimbal de la cámara (Asegurar que mire al frente)
+        self.camera_pitch_motor = self.getDevice("camera pitch")
+        if self.camera_pitch_motor:
+            self.camera_pitch_motor.setPosition(0.7) # Inclinación ligera hacia abajo
         
         # 3. Configurar Motores
         self.front_left_motor = self.getDevice("front left propeller")
@@ -111,9 +116,15 @@ class WebotsYOLOTracker(Robot):
     def process_camera(self):
         # Leer imagen de Webots
         img_array = np.frombuffer(self.camera.getImage(), np.uint8)
-        # Convertir bgra a bgr y HACER COPIA para que sea escribible por OpenCV
+        # Webots suele ser BGRA en Windows. Si ves los colores mal (ej. rojos en azul),
+        # cambia la siguiente línea por: frame = cv2.cvtColor(img[:, :, :3], cv2.COLOR_BGR2RGB)
         img = img_array.reshape((self.camera.getHeight(), self.camera.getWidth(), 4))
         frame = img[:, :, :3].copy()
+        
+        # Debug visual: si no ves nada, mira si estos valores son 0
+        if self.getTime() % 2.0 < 0.05:
+            mean_val = np.mean(frame)
+            print(f"[DEBUG VISION] Frame: {frame.shape} | Brillo medio: {mean_val:.1f}")
         
         height, width, _ = frame.shape
         center_x, center_y = width // 2, height // 2
@@ -123,6 +134,11 @@ class WebotsYOLOTracker(Robot):
         best_person = None
         max_area = 0
         
+        # Verbose: Ver qué está viendo YOLO realmente
+        detected_names = [result.names[int(box.cls[0])] for result in results for box in result.boxes]
+        if detected_names:
+            print(f"YOLO ve: {detected_names}")
+
         for result in results:
             for box in result.boxes:
                 if int(box.cls[0]) == 0: # 0 = person en COCO
@@ -176,7 +192,7 @@ class WebotsYOLOTracker(Robot):
         cv2.putText(frame, mode_text, (10, height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
         cv2.imshow("Webots YOLO Tracker", frame)
-        cv2.waitKey(1)
+        cv2.waitKey(5)
         
     def run(self):
         print("\n--- CONTROLES DEL SIMULADOR ---")
