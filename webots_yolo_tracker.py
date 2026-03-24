@@ -83,6 +83,7 @@ class WebotsYOLOTracker(Robot):
         
         # Gimbal de la cámara (Asegurar que mire al frente)
         self.camera_pitch_motor = self.getDevice("camera pitch")
+        self.camera_roll_motor = self.getDevice("camera roll")
         if self.camera_pitch_motor:
             self.camera_pitch_motor.setPosition(0.7) # Inclinación ligera hacia abajo
         
@@ -109,13 +110,31 @@ class WebotsYOLOTracker(Robot):
         self.is_flying = False
         self.auto_mode = False     
         
+        # Contadores para optimizar
+        self.step_counter = 0
+        self.yolo_freq = 5 # Solo ejecutar YOLO cada 5 steps para evitar lag
+        
         # Parámetros Tracking PID de Visión
         self.center_threshold = 30
         self.area_target = 25000
         
-    def process_camera(self):
+    def process_camera(self, roll_velocity=0.0, pitch_velocity=0.0):
+        # 1. Estabilizar Gimbal (Idéntico al C oficial)
+        if self.camera_pitch_motor:
+            self.camera_pitch_motor.setPosition(-0.1 * pitch_velocity + 0.5) # 0.5 de offset para mirar al frente/abajo
+        if self.camera_roll_motor:
+            self.camera_roll_motor.setPosition(-0.115 * roll_velocity)
+
+        # Solo procesar imagen y YOLO cada N steps para evitar lag en el control físico
+        if self.step_counter % self.yolo_freq != 0:
+            return
+
         # Leer imagen de Webots
-        img_array = np.frombuffer(self.camera.getImage(), np.uint8)
+        img_raw = self.camera.getImage()
+        if not img_raw:
+            return
+
+        img_array = np.frombuffer(img_raw, np.uint8)
         # Webots suele ser BGRA en Windows. Si ves los colores mal (ej. rojos en azul),
         # cambia la siguiente línea por: frame = cv2.cvtColor(img[:, :, :3], cv2.COLOR_BGR2RGB)
         img = img_array.reshape((self.camera.getHeight(), self.camera.getWidth(), 4))
@@ -192,7 +211,7 @@ class WebotsYOLOTracker(Robot):
         cv2.putText(frame, mode_text, (10, height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
         cv2.imshow("Webots YOLO Tracker", frame)
-        cv2.waitKey(5)
+        cv2.waitKey(1) # Volvemos a 1ms porque solo entra aquí cada 5 steps
         
     def run(self):
         print("\n--- CONTROLES DEL SIMULADOR ---")
@@ -240,8 +259,11 @@ class WebotsYOLOTracker(Robot):
             gps_z = gps_values[2] # Altura en Mavic
             roll_velocity, pitch_velocity, yaw_velocity = self.gyro.getValues()
             
-            # 3. Procesar Cámara y YOLO
-            self.process_camera()
+            # 3. Procesar Cámara y Estabilizar Gimbal (con frame skip para YOLO)
+            self.process_camera(roll_velocity=roll_velocity, pitch_velocity=pitch_velocity)
+            
+            # Incrementar contador
+            self.step_counter += 1
             
             # Si estamos en AUTO, YOLO sobreescribe las perturbaciones manuales
             if self.auto_mode and self.is_flying:
