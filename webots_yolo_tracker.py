@@ -179,69 +179,61 @@ class WebotsYOLOTracker(Robot):
         print("-------------------------------\n")
         
         while self.step(self.time_step) != -1:
-            # 1. Leer teclado
+            # 1. Leer teclado y definir perturbaciones (como en el C oficial)
             key = self.keyboard.getKey()
-            
-            # Log de teclas para el usuario
-            if key != -1:
-                print(f"Tecla detectada: {key} ({chr(key) if 32 <= key <= 126 else 'Especial'})")
+            roll_disturbance = 0.0
+            pitch_disturbance = 0.0
+            yaw_disturbance = 0.0
 
-            # Reset de consignas manuales
-            if not self.auto_mode:
-                self.target_pitch = 0.0
-                self.target_roll = 0.0
-                self.target_yaw = 0.0
+            if key != -1:
+                # Log opcional para debug: print(f"Tecla: {key}")
+                pass
 
             if key == ord('T'): 
-                if not self.is_flying:
-                    self.is_flying = True
-                    self.target_altitude = 1.5 # Subimos a 1.5m
-                    print("COMANDO: Despegar -> Target 1.5m")
-                else:
-                    self.auto_mode = not self.auto_mode
-                    print(f"COMANDO: Toggle Auto Mode -> {'ON' if self.auto_mode else 'OFF'}")
+                self.is_flying = not self.is_flying
+                print(f"ESTADO: {'VUELO' if self.is_flying else 'TIERRA'}")
+            elif key == ord('M'): # M para alternar AUTO
+                self.auto_mode = not self.auto_mode
+                print(f"MODO AUTO: {'ON' if self.auto_mode else 'OFF'}")
             elif key == ord('L'):
                 self.is_flying = False
-                self.target_altitude = 0.0
-                self.auto_mode = False
-                print("COMANDO: Aterrizar -> Motores OFF")
+                print("ESTADO: Aterrizaje forzado")
 
-            # Teclas Manuales (solo si no estamos en auto)
-            if not self.auto_mode and self.is_flying:
-                if key == ord('W'): self.target_pitch = -0.6; print("Manual: Forward")
-                if key == ord('S'): self.target_pitch = 0.6; print("Manual: Backward")
-                if key == ord('A'): self.target_roll = -0.6; print("Manual: Left")
-                if key == ord('D'): self.target_roll = 0.6; print("Manual: Right")
-                if key == ord('Q'): self.target_yaw = 2.5; print("Manual: Yaw Left")
-                if key == ord('E'): self.target_yaw = -2.5; print("Manual: Yaw Right")
-                if key == Keyboard.UP: self.target_altitude += 0.1; print(f"Manual: Altitud UP -> {self.target_altitude:.2f}m")
-                if key == Keyboard.DOWN: self.target_altitude -= 0.1; print(f"Manual: Altitud DOWN -> {self.target_altitude:.2f}m")
-                
-            # 2. Leer Sensores de Estabilización
+            # Control Manual mapeado a perturbaciones (WASD + Arrows)
+            if self.is_flying and not self.auto_mode:
+                if key == ord('W') or key == Keyboard.UP:    pitch_disturbance = -2.0
+                if key == ord('S') or key == Keyboard.DOWN:  pitch_disturbance = 2.0
+                if key == ord('D') or key == Keyboard.RIGHT: yaw_disturbance = -1.3
+                if key == ord('A') or key == Keyboard.LEFT:  yaw_disturbance = 1.3
+                if key == ord('Q'): roll_disturbance = 1.0  # Bank Left
+                if key == ord('E'): roll_disturbance = -1.0 # Bank Right
+                # Altura
+                if key == ord('U'): self.target_altitude += 0.05
+                if key == ord('J'): self.target_altitude -= 0.05
+
+            # 2. Leer Sensores
             roll, pitch, yaw = self.imu.getRollPitchYaw()
             gps_values = self.gps.getValues()
-            
-            # Webots 2023+ (Z es altura en mundos ENU, Y es altura en mundos FLU/NUE)
-            # Vamos a usar el valor más alto entre Y y Z como "altura" por seguridad
-            # Pero si Y o Z son negativos, no los queremos.
-            gps_z = max(0.01, gps_values[1], gps_values[2]) 
+            gps_z = gps_values[2] # Altura en Mavic
+            roll_velocity, pitch_velocity, yaw_velocity = self.gyro.getValues()
             
             # 3. Procesar Cámara y YOLO
             self.process_camera()
             
-            # 4. Estabilizar Dron (PID FÍSICO - TRADUCCIÓN EXACTA DEL C)
-            roll_velocity, pitch_velocity, yaw_velocity = self.gyro.getValues()
+            # Si estamos en AUTO, YOLO sobreescribe las perturbaciones
+            if self.auto_mode and self.is_flying:
+                # (Aquí iría la lógica de tracking refinada, por ahora usa los targets internos)
+                pass
+
+            # 4. Estabilizar Dron (PID FÍSICO Oficial)
             clamped_diff = max(-1.0, min(1.0, self.target_altitude - gps_z + K_VERTICAL_OFFSET))
             vertical_input = K_VERTICAL_P * pow(clamped_diff, 3.0)
             
-            # Cálculo de INPUTS (CUIDADO con los signos para compensar el giro)
-            # En el C oficial: k_roll_p * roll + roll_velocity + roll_disturbance
-            # Si target_roll = 0 y roll > 0 (derecha abajo), obtenemos +roll_input -> FR y RR suben -> CORRIGE.
             roll_input = K_ROLL_P * max(-1.0, min(1.0, roll - self.target_roll)) + roll_velocity + roll_disturbance
             pitch_input = K_PITCH_P * max(-1.0, min(1.0, pitch - self.target_pitch)) + pitch_velocity + pitch_disturbance
             yaw_input = yaw_disturbance
             
-            # Mezclador de motores OFICIAL (Mavic 2 Pro)
+            # Mezclador (Mavic 2 Pro)
             if not self.is_flying and gps_z < 0.2:
                 m1 = m2 = m3 = m4 = 0.0
             else:
@@ -250,7 +242,7 @@ class WebotsYOLOTracker(Robot):
                 m3 = K_VERTICAL_THRUST + vertical_input - roll_input - pitch_input + yaw_input
                 m4 = K_VERTICAL_THRUST + vertical_input + roll_input - pitch_input - yaw_input
             
-            # Aplicar potencias (¡OJO!: Motores 2 y 3 van invertidos en Webots para este modelo)
+            # Aplicar potencias (Motores 2 y 3 invertidos)
             self.front_left_motor.setVelocity(self._clamp(m1))
             self.front_right_motor.setVelocity(self._clamp(-m2))
             self.rear_left_motor.setVelocity(self._clamp(-m3))
