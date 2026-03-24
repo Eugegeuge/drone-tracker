@@ -118,12 +118,6 @@ class WebotsYOLOTracker(Robot):
         self.area_target = 25000
         
     def process_camera(self, roll_velocity=0.0, pitch_velocity=0.0):
-        # 1. Estabilizar Gimbal (Idéntico al C oficial)
-        if self.camera_pitch_motor:
-            self.camera_pitch_motor.setPosition(-0.1 * pitch_velocity + 0.5) # 0.5 de offset para mirar al frente/abajo
-        if self.camera_roll_motor:
-            self.camera_roll_motor.setPosition(-0.115 * roll_velocity)
-
         # Solo procesar imagen y YOLO cada N steps para evitar lag en el control físico
         if self.step_counter % self.yolo_freq != 0:
             return
