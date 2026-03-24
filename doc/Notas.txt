@@ -1,0 +1,3 @@
+- Investigar Modelo Dron
+- API dron
+- Modelo IA simple ~ Yolo

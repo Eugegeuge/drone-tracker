@@ -4,9 +4,13 @@
 - [x] Descargarse la API del drone y ver cómo se usa
 - [x] Poner en marcha un detector de objetos sencillo, tipo yolo (ultralytics)
 - [x] Hacer un pequeño programa que detecte una persona y dé ordenes de movimiento al drone para "centrar" la persona en la imagen
+- [x] Implementar simulador 2D con latencia y físicas (MockTello)
+- [x] Prototipar simulador 3D (Panda3D) y controlador profesional (Webots)
+- [x] Investigar y listar referencias académicas y repositorios de simulación avanzados
 
 ## Deberes / Tareas Pendientes
 - [ ] Implementar controlador PID (Proporcional-Integral-Derivativo) para movimientos más suaves.
+- [ ] Refinar el seguimiento en Webots (Opción A) con el PID sintonizado.
 - [ ] Añadir suavizado de señal (filtro de media exponencial) para evitar vibraciones en la detección.
 - [ ] Crear máquina de estados (Buscando vs Siguiendo) y failsafes (batería baja, pérdida de objetivo).
 
