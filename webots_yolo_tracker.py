@@ -215,80 +215,99 @@ class WebotsYOLOTracker(Robot):
         cv2.waitKey(1) # Volvemos a 1ms porque solo entra aquí cada 5 steps
         
     def run(self):
-        print("\n--- CONTROLES DEL SIMULADOR ---")
-        print("T: Despegar / Toggle AUTO Mode")
-        print("L: Aterrizar")
-        print("Manual: W/S (Avanzar), A/D (Lados), Q/E (Girar), Flechas Arriba/Abajo (Altura)")
-        print("-------------------------------\n")
-        
+        # 1. Esperar un segundo (Idéntico al C oficial)
+        print("Start the drone...")
         while self.step(self.time_step) != -1:
-            # 1. Leer teclado y definir perturbaciones (MAPEO OFICIAL MAVIC 2 PRO)
-            key = self.keyboard.getKey()
+            if self.getTime() > 1.0:
+                break
+
+        print("You can control the drone with your computer keyboard:")
+        print("- 'up': move forward.")
+        print("- 'down': move backward.")
+        print("- 'right': turn right.")
+        print("- 'left': turn left.")
+        print("- 'shift + up': increase the target altitude.")
+        print("- 'shift + down': decrease the target altitude.")
+        print("- 'shift + right': strafe right.")
+        print("- 'shift + left': strafe left.")
+        print("- 'T': Takeoff / Toggle AUTO Mode.")
+        print("- 'M': Toggle AUTO Mode.")
+
+        while self.step(self.time_step) != -1:
+            time_val = self.getTime()
+
+            # 2. Leer Sensores (roll, pitch, altitud, velocities)
+            roll, pitch, yaw_raw = self.imu.getRollPitchYaw()
+            gps_values = self.gps.getValues()
+            altitude = gps_values[2]
+            roll_velocity, pitch_velocity, yaw_velocity = self.gyro.getValues()
+            
+            # 3. LEDs y Gimbal (Idéntico al C oficial)
+            led_state = int(time_val) % 2
+            if hasattr(self, 'front_left_led') and self.front_left_led:
+                self.front_left_led.set(led_state)
+            if hasattr(self, 'front_right_led') and self.front_right_led:
+                self.front_right_led.set(not led_state)
+            
+            # Estabilizar Cámara (Gimbal)
+            if self.camera_roll_motor:
+                self.camera_roll_motor.setPosition(-0.115 * roll_velocity)
+            if self.camera_pitch_motor:
+                self.camera_pitch_motor.setPosition(-0.1 * pitch_velocity)
+
+            # 4. Leer Teclado (Lógica Disturbance idéntica al C)
             roll_disturbance = 0.0
             pitch_disturbance = 0.0
             yaw_disturbance = 0.0
-
-            # Lógica Anti-Spam para TOGGLE (T, M, L)
-            if key != self.last_key:
-                if key == ord('T'): 
-                    self.is_flying = not self.is_flying
-                    print(f"ESTADO: {'VUELO' if self.is_flying else 'TIERRA'}")
-                elif key == ord('M'): # M para alternar AUTO
-                    self.auto_mode = not self.auto_mode
-                    print(f"MODO AUTO: {'ON' if self.auto_mode else 'OFF'}")
-                elif key == ord('L'):
-                    self.is_flying = False
-                    print("ESTADO: Aterrizaje forzado")
+            
+            key = self.keyboard.getKey()
+            while key > 0:
+                # Comprobar Toggles (T, M) con debouncing rudimentario
+                if key != self.last_key:
+                    if key == ord('T'): 
+                        self.is_flying = not self.is_flying
+                        print(f"ESTADO: {'VUELO' if self.is_flying else 'TIERRA'}")
+                    elif key == ord('M'):
+                        self.auto_mode = not self.auto_mode
+                        print(f"AUTO MODE: {'ON' if self.auto_mode else 'OFF'}")
                 
-            self.last_key = key
-
-            # Controles Manuales (Mapeo idéntico al C oficial)
-            if self.is_flying and not self.auto_mode:
-                # El teclado en Webots puede devolver múltiples teclas combinadas
-                while key > 0:
-                    # Flechas simples: Pitch y Yaw
+                # Mapeo idéntico al C (Arrows + Shift)
+                if self.is_flying:
                     if key == Keyboard.UP:    pitch_disturbance = -2.0
                     elif key == Keyboard.DOWN:  pitch_disturbance = 2.0
                     elif key == Keyboard.RIGHT: yaw_disturbance = -1.3
                     elif key == Keyboard.LEFT:  yaw_disturbance = 1.3
-                    
-                    # Shift + Flechas: Roll y Altitud
-                    elif key == (Keyboard.SHIFT + Keyboard.RIGHT): roll_disturbance = -1.0 # Strafe Right
-                    elif key == (Keyboard.SHIFT + Keyboard.LEFT):  roll_disturbance = 1.0  # Strafe Left
+                    elif key == (Keyboard.SHIFT + Keyboard.RIGHT): roll_disturbance = -1.0
+                    elif key == (Keyboard.SHIFT + Keyboard.LEFT):  roll_disturbance = 1.0
                     elif key == (Keyboard.SHIFT + Keyboard.UP):    self.target_altitude += 0.05
                     elif key == (Keyboard.SHIFT + Keyboard.DOWN):  self.target_altitude -= 0.05
-                    
-                    # Consumir siguiente tecla en el buffer (si hay varias pulsadas)
-                    key = self.keyboard.getKey()
+                
+                self.last_key = key
+                key = self.keyboard.getKey()
 
-            # 2. Leer Sensores
-            roll, pitch, yaw = self.imu.getRollPitchYaw()
-            gps_values = self.gps.getValues()
-            gps_z = gps_values[2] # Altura en Mavic
-            roll_velocity, pitch_velocity, yaw_velocity = self.gyro.getValues()
-            
-            # 3. Procesar Cámara y Estabilizar Gimbal (con frame skip para YOLO)
+            # 5. Procesar Cámara y YOLO (cada X ms) - Sobreescribe disturbances si está en AUTO
             self.process_camera(roll_velocity=roll_velocity, pitch_velocity=pitch_velocity)
-            
-            # Incrementar contador
             self.step_counter += 1
             
-            # Si estamos en AUTO, YOLO sobreescribe las perturbaciones manuales
             if self.auto_mode and self.is_flying:
+                # YOLO toma el mando de las perturbaciones
                 roll_disturbance = self.auto_roll_disturbance
                 pitch_disturbance = self.auto_pitch_disturbance
                 yaw_disturbance = self.auto_yaw_disturbance
 
-            # 4. Estabilizar Dron (PID FÍSICO Oficial)
-            clamped_diff = max(-1.0, min(1.0, self.target_altitude - gps_z + K_VERTICAL_OFFSET))
-            vertical_input = K_VERTICAL_P * pow(clamped_diff, 3.0)
-            
-            roll_input = K_ROLL_P * max(-1.0, min(1.0, roll - self.target_roll)) + roll_velocity + roll_disturbance
-            pitch_input = K_PITCH_P * max(-1.0, min(1.0, pitch - self.target_pitch)) + pitch_velocity + pitch_disturbance
+            # 6. Calcular Entradas (TRADUCCIÓN 1:1 DEL C)
+            # roll_input = k_roll_p * CLAMP(roll, -1.0, 1.0) + roll_velocity + roll_disturbance
+            roll_input = K_ROLL_P * max(-1.0, min(1.0, roll)) + roll_velocity + roll_disturbance
+            # pitch_input = k_pitch_p * CLAMP(pitch, -1.0, 1.0) + pitch_velocity + pitch_disturbance
+            pitch_input = K_PITCH_P * max(-1.0, min(1.0, pitch)) + pitch_velocity + pitch_disturbance
             yaw_input = yaw_disturbance
-            
-            # Mezclador (Mavic 2 Pro)
-            if not self.is_flying and gps_z < 0.2:
+            # clamped_difference_altitude = CLAMP(target_altitude - altitude + k_vertical_offset, -1.0, 1.0)
+            clamped_diff_alt = max(-1.0, min(1.0, self.target_altitude - altitude + K_VERTICAL_OFFSET))
+            vertical_input = K_VERTICAL_P * pow(clamped_diff_alt, 3.0)
+
+            # 7. Actuación de Motores (MEZCLADOR OFICIAL 1:1)
+            # Solo aplicamos potencia si está en modo vuelo, similar al logic OFF de Webots
+            if not self.is_flying and altitude < 0.2:
                 m1 = m2 = m3 = m4 = 0.0
             else:
                 m1 = K_VERTICAL_THRUST + vertical_input - roll_input + pitch_input - yaw_input
@@ -296,15 +315,15 @@ class WebotsYOLOTracker(Robot):
                 m3 = K_VERTICAL_THRUST + vertical_input - roll_input - pitch_input + yaw_input
                 m4 = K_VERTICAL_THRUST + vertical_input + roll_input - pitch_input - yaw_input
             
-            # Aplicar potencias (Motores 2 y 3 invertidos)
+            # Aplicar a los motores (Motores 2 y 3 invertidos según hardware Webots Mavic)
             self.front_left_motor.setVelocity(self._clamp(m1))
             self.front_right_motor.setVelocity(self._clamp(-m2))
             self.rear_left_motor.setVelocity(self._clamp(-m3))
             self.rear_right_motor.setVelocity(self._clamp(m4))
 
-            # Debug de motores (solo si estamos intentando volar pero no sube)
-            if self.is_flying and gps_z < 0.2 and self.getTime() % 2.0 < 0.1:
-                print(f"[DEBUG MOTORES] FL={m1:.1f}, FR={m2:.1f}, RL={m3:.1f}, RR={m4:.1f}")
+            # Debug Telemetría
+            if self.getTime() % 1.5 < 0.05:
+                print(f"ALT: {altitude:.2f}m | TARG: {self.target_altitude:.1f}m | AUTO: {self.auto_mode}")
 
     def _clamp(self, val):
         MAX_SPEED = 600.0 # Volvemos al límite recomendado
