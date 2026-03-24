@@ -81,11 +81,9 @@ class WebotsYOLOTracker(Robot):
         self.gyro = self.getDevice("gyro")
         self.gyro.enable(self.time_step)
         
-        # Gimbal de la cámara (Asegurar que mire al frente)
+        # Gimbal de la cámara
         self.camera_pitch_motor = self.getDevice("camera pitch")
         self.camera_roll_motor = self.getDevice("camera roll")
-        if self.camera_pitch_motor:
-            self.camera_pitch_motor.setPosition(0.7) # Inclinación ligera hacia abajo
         
         # 3. Configurar Motores
         self.front_left_motor = self.getDevice("front left propeller")
