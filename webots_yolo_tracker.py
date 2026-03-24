@@ -50,6 +50,13 @@ except ImportError:
     print("Error: ultralytics no está instalado. Ejecuta: pip install ultralytics")
     exit(1)
 
+# Importar el controlador matemático centralizado
+try:
+    from pid_controller import PIDController
+except ImportError:
+    print("WARNING: pid_controller.py no encontrado. Asegúrate de ejecutar desde la raíz del repo.")
+    import sys; sys.exit(1)
+
 # --- CONFIGURACION PID ESTABILIZACION (Drone de Webots) ---
 # Constantes OFICIALES de Webots para el Mavic 2 Pro
 K_VERTICAL_THRUST = 68.5   # Con este valor el dron flota
@@ -117,17 +124,11 @@ class WebotsYOLOTracker(Robot):
         self.center_threshold = 30
         self.area_target = 25000
         
-        # Ganancias PID de Visión (Transforman error de píxeles en perturbaciones del drone)
-        self.kp_yaw = 0.005
-        self.kd_yaw = 0.002
-        self.kp_pitch = 0.00003
-        self.kd_pitch = 0.00002
-        self.kp_alt = 0.0005
-        self.kd_alt = 0.001
-        
-        self.prev_error_x = 0
-        self.prev_error_y = 0
-        self.prev_error_area = 0
+        # Instanciar Controladores Matemáticos Independientes (P, I, D)
+        # Separa la lógica matemática de la simulación.
+        self.yaw_pid = PIDController(kp=0.005, kd=0.002)
+        self.pitch_pid = PIDController(kp=0.00003, kd=0.00002)
+        self.alt_pid = PIDController(kp=0.0005, kd=0.001)
         
     def process_camera(self, roll_velocity=0.0, pitch_velocity=0.0):
         # Solo procesar imagen y YOLO cada N steps para evitar lag en el control físico
@@ -205,9 +206,7 @@ class WebotsYOLOTracker(Robot):
                 # ----------------
                 # 1. PID de Yaw (Giro para centrar X)
                 # ----------------
-                yaw_p = error_x * self.kp_yaw
-                yaw_d = (error_x - self.prev_error_x) * self.kd_yaw
-                self.auto_yaw_disturbance = -(yaw_p + yaw_d) # Invertido según ejes simulador
+                self.auto_yaw_disturbance = -self.yaw_pid.compute(error_x) # Invertido según ejes simulador
                 
                 if abs(error_x) < self.center_threshold:
                     self.auto_yaw_disturbance = 0.0
@@ -217,27 +216,19 @@ class WebotsYOLOTracker(Robot):
                 # ----------------
                 # 2. PID de Altura (Modificar Target Altitude)
                 # ----------------
-                alt_p = error_y * self.kp_alt
-                alt_d = (error_y - self.prev_error_y) * self.kd_alt
+                alt_correction = self.alt_pid.compute(error_y)
                 if abs(error_y) > 40: # Zona muerta vertical
-                    self.target_altitude += max(-0.05, min(0.05, alt_p + alt_d))
+                    self.target_altitude += max(-0.05, min(0.05, alt_correction))
                     
                 # ----------------
                 # 3. PID de Pitch (Avanzar/Retroceder según área)
                 # ----------------
-                pitch_p = error_area * self.kp_pitch
-                pitch_d = (error_area - self.prev_error_area) * self.kd_pitch
-                self.auto_pitch_disturbance = -(pitch_p + pitch_d) # Pitch neg = Avance
+                self.auto_pitch_disturbance = -self.pitch_pid.compute(error_area) # Pitch neg = Avance
                 
                 if abs(error_area) < 5000: # Tolerancia de tamaño
                     self.auto_pitch_disturbance = 0.0
                 else:
                     self.auto_pitch_disturbance = max(-1.0, min(1.0, self.auto_pitch_disturbance))
-                
-                # Guardar errores para la siguiente iteración (Derivada)
-                self.prev_error_x = error_x
-                self.prev_error_y = error_y
-                self.prev_error_area = error_area
                 
                 info_text = f"AUTO: P {self.auto_pitch_disturbance:.2f} | Y {self.auto_yaw_disturbance:.2f}"
                 cv2.putText(frame, info_text, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
