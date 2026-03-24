@@ -222,13 +222,13 @@ class WebotsYOLOTracker(Robot):
         print("-------------------------------\n")
         
         while self.step(self.time_step) != -1:
-            # 1. Leer teclado y definir perturbaciones (como en el C oficial)
+            # 1. Leer teclado y definir perturbaciones (MAPEO OFICIAL MAVIC 2 PRO)
             key = self.keyboard.getKey()
             roll_disturbance = 0.0
             pitch_disturbance = 0.0
             yaw_disturbance = 0.0
 
-            # Lógica Anti-Spam (solo toggle si la tecla ha cambiado)
+            # Lógica Anti-Spam para TOGGLE (T, M, L)
             if key != self.last_key:
                 if key == ord('T'): 
                     self.is_flying = not self.is_flying
@@ -242,17 +242,24 @@ class WebotsYOLOTracker(Robot):
                 
             self.last_key = key
 
-            # Control Manual mapeado a perturbaciones (WASD + Arrows)
+            # Controles Manuales (Mapeo idéntico al C oficial)
             if self.is_flying and not self.auto_mode:
-                if key == ord('W') or key == Keyboard.UP:    pitch_disturbance = -2.0
-                if key == ord('S') or key == Keyboard.DOWN:  pitch_disturbance = 2.0
-                if key == ord('D') or key == Keyboard.RIGHT: yaw_disturbance = -1.3
-                if key == ord('A') or key == Keyboard.LEFT:  yaw_disturbance = 1.3
-                if key == ord('Q'): roll_disturbance = 1.0  # Bank Left
-                if key == ord('E'): roll_disturbance = -1.0 # Bank Right
-                # Altura
-                if key == ord('U'): self.target_altitude += 0.05
-                if key == ord('J'): self.target_altitude -= 0.05
+                # El teclado en Webots puede devolver múltiples teclas combinadas
+                while key > 0:
+                    # Flechas simples: Pitch y Yaw
+                    if key == Keyboard.UP:    pitch_disturbance = -2.0
+                    elif key == Keyboard.DOWN:  pitch_disturbance = 2.0
+                    elif key == Keyboard.RIGHT: yaw_disturbance = -1.3
+                    elif key == Keyboard.LEFT:  yaw_disturbance = 1.3
+                    
+                    # Shift + Flechas: Roll y Altitud
+                    elif key == (Keyboard.SHIFT + Keyboard.RIGHT): roll_disturbance = -1.0 # Strafe Right
+                    elif key == (Keyboard.SHIFT + Keyboard.LEFT):  roll_disturbance = 1.0  # Strafe Left
+                    elif key == (Keyboard.SHIFT + Keyboard.UP):    self.target_altitude += 0.05
+                    elif key == (Keyboard.SHIFT + Keyboard.DOWN):  self.target_altitude -= 0.05
+                    
+                    # Consumir siguiente tecla en el buffer (si hay varias pulsadas)
+                    key = self.keyboard.getKey()
 
             # 2. Leer Sensores
             roll, pitch, yaw = self.imu.getRollPitchYaw()
