@@ -132,37 +132,44 @@ class WebotsYOLOTracker(Robot):
                         max_area = area
                         best_person = (x1, y1, x2, y2)
                         
-        self.target_yaw = 0.0
-        self.target_pitch = 0.0
-        self.target_roll = 0.0 # Reiniciamos para control manual/auto
+        self.auto_yaw_disturbance = 0.0
+        self.auto_pitch_disturbance = 0.0
+        self.auto_roll_disturbance = 0.0
         
-        if self.auto_mode and best_person and self.is_flying:
+        if best_person and self.is_flying:
             x1, y1, x2, y2 = best_person
             px, py = (x1 + x2) // 2, (y1 + y2) // 2
             
             error_x = px - center_x
             error_y = center_y - py # Positivo si está por encima del centro de la pantalla
             
-            # Ajuste de Yaw (Rotar hacia la persona)
-            if abs(error_x) > self.center_threshold:
-                # Si error_x > 0 (derecha), queremos girar a la derecha
-                self.target_yaw = -2.5 if error_x > 0 else 2.5
-                
-            # Ajuste de Altura
-            if error_y > 40:
-                self.target_altitude += 0.1
-            elif error_y < -40:
-                self.target_altitude -= 0.1
-                
-            # Ajuste de Pitch (Avanzar/Retroceder)
-            if max_area < self.area_target - 5000:
-                self.target_pitch = -0.3 # Avanzar (Inclinación negativa en Webots es hacia adelante)
-            elif max_area > self.area_target + 5000:
-                self.target_pitch = 0.3 # Retroceder
-                
+            # Dibujar siempre si hay detección
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, f"Area: {max_area} | Pitch: {self.target_pitch} | Yaw: {self.target_yaw}", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
-            print(f"> OBJETIVO DETECTADO < Área: {max_area}. Pitch: {self.target_pitch}, Yaw: {self.target_yaw}")
+            cv2.putText(frame, "PERSONA", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+            if self.auto_mode:
+                # Ajuste de Yaw (Hacia el centro en X)
+                if abs(error_x) > self.center_threshold:
+                    # En el C oficial, yaw_disturbance es aprox +-1.3 para girar rápido
+                    self.auto_yaw_disturbance = -1.3 if error_x > 0 else 1.3
+                    
+                # Ajuste de Altura (Modificamos el target_altitude)
+                if error_y > 40:
+                    self.target_altitude += 0.05
+                elif error_y < -40:
+                    self.target_altitude -= 0.05
+                    
+                # Ajuste de Pitch (Avanzar/Retroceder)
+                if max_area < self.area_target - 5000:
+                    self.auto_pitch_disturbance = -0.5 # Avanzar (Negative in C is forward)
+                elif max_area > self.area_target + 5000:
+                    self.auto_pitch_disturbance = 0.5 # Retroceder
+                
+                info_text = f"AUTO: Pitch {self.auto_pitch_disturbance} | Yaw {self.auto_yaw_disturbance}"
+                cv2.putText(frame, info_text, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
+                print(f"> TRACKING AUTO < Área: {max_area}. Pitch Dist: {self.auto_pitch_disturbance}, Yaw Dist: {self.auto_yaw_disturbance}")
+            else:
+                cv2.putText(frame, "PRESIONA 'M' PARA AUTO-TRACKING", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1)
             
         # Dibujar HUD
         mode_text = "MODO: AUTO (YOLO)" if self.auto_mode else "MODO: MANUAL (WASD)"
@@ -220,10 +227,11 @@ class WebotsYOLOTracker(Robot):
             # 3. Procesar Cámara y YOLO
             self.process_camera()
             
-            # Si estamos en AUTO, YOLO sobreescribe las perturbaciones
+            # Si estamos en AUTO, YOLO sobreescribe las perturbaciones manuales
             if self.auto_mode and self.is_flying:
-                # (Aquí iría la lógica de tracking refinada, por ahora usa los targets internos)
-                pass
+                roll_disturbance = self.auto_roll_disturbance
+                pitch_disturbance = self.auto_pitch_disturbance
+                yaw_disturbance = self.auto_yaw_disturbance
 
             # 4. Estabilizar Dron (PID FÍSICO Oficial)
             clamped_diff = max(-1.0, min(1.0, self.target_altitude - gps_z + K_VERTICAL_OFFSET))
