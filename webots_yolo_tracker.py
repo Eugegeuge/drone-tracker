@@ -63,9 +63,9 @@ class WebotsYOLOTracker(Robot):
         super().__init__()
         self.time_step = int(self.getBasicTimeStep())
         
-        # 1. Cargar YOLO (Puedes probar 'yolov8s.pt' si el 'n' es poco preciso)
-        print("Cargando modelo YOLOv8n...")
-        self.yolo_model = YOLO('yolov8n.pt') 
+        # 1. Cargar YOLO (Modelo de Pose para detectar el torso y esqueleto humano)
+        print("Cargando modelo YOLOv8n-Pose...")
+        self.yolo_model = YOLO('yolov8n-pose.pt') 
         print("YOLO listo.")
 
         # 2. Configurar Sensores del Dron
@@ -117,6 +117,18 @@ class WebotsYOLOTracker(Robot):
         self.center_threshold = 30
         self.area_target = 25000
         
+        # Ganancias PID de Visión (Transforman error de píxeles en perturbaciones del drone)
+        self.kp_yaw = 0.005
+        self.kd_yaw = 0.002
+        self.kp_pitch = 0.00003
+        self.kd_pitch = 0.00002
+        self.kp_alt = 0.0005
+        self.kd_alt = 0.001
+        
+        self.prev_error_x = 0
+        self.prev_error_y = 0
+        self.prev_error_area = 0
+        
     def process_camera(self, roll_velocity=0.0, pitch_velocity=0.0):
         # Solo procesar imagen y YOLO cada N steps para evitar lag en el control físico
         if self.step_counter % self.yolo_freq != 0:
@@ -144,58 +156,91 @@ class WebotsYOLOTracker(Robot):
         results = self.yolo_model(frame, verbose=False)
         
         best_person = None
+        best_keypoints = None
         max_area = 0
-        
-        # Verbose: Ver qué está viendo YOLO realmente
-        detected_names = [result.names[int(box.cls[0])] for result in results for box in result.boxes]
-        if detected_names:
-            print(f"YOLO ve: {detected_names}")
 
         for result in results:
-            for box in result.boxes:
-                if int(box.cls[0]) == 0: # 0 = person en COCO
+            if not result.boxes or not hasattr(result, 'keypoints') or result.keypoints is None:
+                continue
+                
+            for box, kpts in zip(result.boxes, result.keypoints.data):
+                # Filtro Estricto: Persona y Confianza > 70%
+                if int(box.cls[0]) == 0 and float(box.conf[0]) > 0.70:
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     area = (x2-x1) * (y2-y1)
                     if area > max_area:
                         max_area = area
                         best_person = (x1, y1, x2, y2)
+                        best_keypoints = kpts
                         
         self.auto_yaw_disturbance = 0.0
         self.auto_pitch_disturbance = 0.0
         self.auto_roll_disturbance = 0.0
         
-        if best_person and self.is_flying:
+        if best_person and best_keypoints is not None:
             x1, y1, x2, y2 = best_person
+            
+            # Intentar usar el punto medio de los hombros (Torso superior) para estabilidad
             px, py = (x1 + x2) // 2, (y1 + y2) // 2
+            try:
+                # Keypoints YOLOv8 Pose: 5=Left Shoulder, 6=Right Shoulder
+                ls = best_keypoints[5]
+                rs = best_keypoints[6]
+                if ls[2] > 0.4 and rs[2] > 0.4:
+                    px = int((ls[0] + rs[0]) / 2.0)
+                    py = int((ls[1] + rs[1]) / 2.0)
+                    cv2.circle(frame, (px, py), 6, (0, 0, 255), -1)
+            except Exception:
+                pass # Si el tensor no tiene la forma esperada, caemos en el centro de la BB
             
             error_x = px - center_x
-            error_y = center_y - py # Positivo si está por encima del centro de la pantalla
+            error_y = center_y - py # Positivo si persona está por encima del centro
+            error_area = self.area_target - max_area # Positivo: muy lejos. Negativo: muy cerca.
             
-            # Dibujar siempre si hay detección
+            # Dibujar siempre si hay detección sólida
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, "PERSONA", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            cv2.putText(frame, "PERSONA ESTABLE", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
             if self.auto_mode:
-                # Ajuste de Yaw (Hacia el centro en X)
-                if abs(error_x) > self.center_threshold:
-                    # En el C oficial, yaw_disturbance es aprox +-1.3 para girar rápido
-                    self.auto_yaw_disturbance = -1.3 if error_x > 0 else 1.3
-                    
-                # Ajuste de Altura (Modificamos el target_altitude)
-                if error_y > 40:
-                    self.target_altitude += 0.05
-                elif error_y < -40:
-                    self.target_altitude -= 0.05
-                    
-                # Ajuste de Pitch (Avanzar/Retroceder)
-                if max_area < self.area_target - 5000:
-                    self.auto_pitch_disturbance = -0.5 # Avanzar (Negative in C is forward)
-                elif max_area > self.area_target + 5000:
-                    self.auto_pitch_disturbance = 0.5 # Retroceder
+                # ----------------
+                # 1. PID de Yaw (Giro para centrar X)
+                # ----------------
+                yaw_p = error_x * self.kp_yaw
+                yaw_d = (error_x - self.prev_error_x) * self.kd_yaw
+                self.auto_yaw_disturbance = -(yaw_p + yaw_d) # Invertido según ejes simulador
                 
-                info_text = f"AUTO: Pitch {self.auto_pitch_disturbance} | Yaw {self.auto_yaw_disturbance}"
+                if abs(error_x) < self.center_threshold:
+                    self.auto_yaw_disturbance = 0.0
+                else:
+                    self.auto_yaw_disturbance = max(-1.3, min(1.3, self.auto_yaw_disturbance))
+                    
+                # ----------------
+                # 2. PID de Altura (Modificar Target Altitude)
+                # ----------------
+                alt_p = error_y * self.kp_alt
+                alt_d = (error_y - self.prev_error_y) * self.kd_alt
+                if abs(error_y) > 40: # Zona muerta vertical
+                    self.target_altitude += max(-0.05, min(0.05, alt_p + alt_d))
+                    
+                # ----------------
+                # 3. PID de Pitch (Avanzar/Retroceder según área)
+                # ----------------
+                pitch_p = error_area * self.kp_pitch
+                pitch_d = (error_area - self.prev_error_area) * self.kd_pitch
+                self.auto_pitch_disturbance = -(pitch_p + pitch_d) # Pitch neg = Avance
+                
+                if abs(error_area) < 5000: # Tolerancia de tamaño
+                    self.auto_pitch_disturbance = 0.0
+                else:
+                    self.auto_pitch_disturbance = max(-1.0, min(1.0, self.auto_pitch_disturbance))
+                
+                # Guardar errores para la siguiente iteración (Derivada)
+                self.prev_error_x = error_x
+                self.prev_error_y = error_y
+                self.prev_error_area = error_area
+                
+                info_text = f"AUTO: P {self.auto_pitch_disturbance:.2f} | Y {self.auto_yaw_disturbance:.2f}"
                 cv2.putText(frame, info_text, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
-                print(f"> TRACKING AUTO < Área: {max_area}. Pitch Dist: {self.auto_pitch_disturbance}, Yaw Dist: {self.auto_yaw_disturbance}")
             else:
                 cv2.putText(frame, "PRESIONA 'M' PARA AUTO-TRACKING", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1)
             
@@ -253,9 +298,10 @@ class WebotsYOLOTracker(Robot):
             if self.camera_pitch_motor:
                 self.camera_pitch_motor.setPosition(-0.1 * pitch_velocity)
 
-            # Transform the keyboard input to disturbances on the stabilization algorithm.
+            # 4. Transform the keyboard input to disturbances on the stabilization algorithm.
+            PITCH_TRIM = 0.03 # Ajuste fino para contrarrestar la tendencia a avanzar
             roll_disturbance = 0.0
-            pitch_disturbance = 0.0
+            pitch_disturbance = PITCH_TRIM
             yaw_disturbance = 0.0
             
             key = self.keyboard.getKey()

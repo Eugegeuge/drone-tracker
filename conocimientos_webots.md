@@ -32,4 +32,10 @@ Este documento resume los retos técnicos superados para lograr que el dron Mavi
 
 ## 7. Gestión de Teclado (Debouncing)
 - **Problema**: Al pulsar una tecla de tipo "toggle" (ej. 'T' para despegar o 'M' para auto), la acción se repite muchas veces ("spam") porque `keyboard.getKey()` devuelve la tecla en cada paso de simulación.
-- **Solución**: Implementar una lógica de estado previo. Guardar `self.last_key` y solo ejecutar la acción si la tecla actual es distinta a la anterior: `if current_key == ord('T') and current_key != self.last_key:`.
+- **Solución**: Implementar una lógica de estado previo. Guardar `self.last_key` y solo ejecutar la acción si la tecla actual es distinta a la anterior.
+
+## 8. Seguimiento PID Avanzado y YOLOv8-Pose
+- **Problema de Bang-Bang**: Asignar valores fijos de giro (ej. `yaw = 1.3`) si el objetivo no está centrado provoca tirones violentos e inestabilidad (control On/Off o Bang-Bang).
+- **Solución PID**: Implementar un bucle PD (Proporcional-Derivativo) sobre el error en píxeles. Multiplicar `error_x * Kp` para girar suave, y sumar `(error_x - prev_error_x) * Kd` para frenar antes de oscilar.
+- **Problema de Bounding Box**: El centro de una caja delimitadora salta drásticamente si la persona mueve un brazo, desestabilizando el dron.
+- **Solución Pose**: Usar `yolov8n-pose.pt` para extraer los _Keypoints_ esqueléticos (hombros: 5 y 6). Calcular el punto medio de los hombros proporciona un centro de masa (torso) extremadamente estable anclado al pecho de la persona.
