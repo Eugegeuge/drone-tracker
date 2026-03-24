@@ -51,8 +51,8 @@ except ImportError:
     exit(1)
 
 # --- CONFIGURACION PID ESTABILIZACION (Drone de Webots) ---
-# Constantes básicas extraidas de la simulación del Mavic de Webots
-K_VERTICAL_THRUST = 68.5
+# Constantes OFICIALES de Webots para el Mavic 2 Pro
+K_VERTICAL_THRUST = 68.5   # Con este valor el dron flota
 K_VERTICAL_OFFSET = 0.6
 K_VERTICAL_P = 3.0
 K_ROLL_P = 50.0
@@ -97,21 +97,23 @@ class WebotsYOLOTracker(Robot):
         self.keyboard.enable(self.time_step)
 
         # 4. Estado del Vuelo y Tracking
-        self.target_altitude = 0.0 # Objetivo de altura
-        self.target_yaw = 0.0      # Offset de rotación
-        self.target_pitch = 0.0    # Adelante/Atrás
+        self.target_altitude = 1.0 # Altitud por defecto (como en el C)
+        self.target_yaw = 0.0      
+        self.target_pitch = 0.0    
+        self.target_roll = 0.0     
         self.is_flying = False
+        self.auto_mode = False     
         
-        # ParámetrosTracking PID de Visión
+        # Parámetros Tracking PID de Visión
         self.center_threshold = 30
         self.area_target = 25000
         
     def process_camera(self):
         # Leer imagen de Webots
         img_array = np.frombuffer(self.camera.getImage(), np.uint8)
-        # Convertir bgra a bgr
+        # Convertir bgra a bgr y HACER COPIA para que sea escribible por OpenCV
         img = img_array.reshape((self.camera.getHeight(), self.camera.getWidth(), 4))
-        frame = img[:, :, :3]
+        frame = img[:, :, :3].copy()
         
         height, width, _ = frame.shape
         center_x, center_y = width // 2, height // 2
@@ -132,8 +134,9 @@ class WebotsYOLOTracker(Robot):
                         
         self.target_yaw = 0.0
         self.target_pitch = 0.0
+        self.target_roll = 0.0 # Reiniciamos para control manual/auto
         
-        if best_person and self.is_flying:
+        if self.auto_mode and best_person and self.is_flying:
             x1, y1, x2, y2 = best_person
             px, py = (x1 + x2) // 2, (y1 + y2) // 2
             
@@ -143,85 +146,122 @@ class WebotsYOLOTracker(Robot):
             # Ajuste de Yaw (Rotar hacia la persona)
             if abs(error_x) > self.center_threshold:
                 # Si error_x > 0 (derecha), queremos girar a la derecha
-                self.target_yaw = -2.0 if error_x > 0 else 2.0
+                self.target_yaw = -2.5 if error_x > 0 else 2.5
                 
             # Ajuste de Altura
-            if error_y > 30:
-                self.target_altitude += 0.05
-            elif error_y < -30:
-                self.target_altitude -= 0.05
+            if error_y > 40:
+                self.target_altitude += 0.1
+            elif error_y < -40:
+                self.target_altitude -= 0.1
                 
             # Ajuste de Pitch (Avanzar/Retroceder)
             if max_area < self.area_target - 5000:
-                self.target_pitch = -0.25 # Avanzar
+                self.target_pitch = -0.3 # Avanzar (Inclinación negativa en Webots es hacia adelante)
             elif max_area > self.area_target + 5000:
-                self.target_pitch = 0.25 # Retroceder
+                self.target_pitch = 0.3 # Retroceder
                 
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(frame, f"Area: {max_area} | Pitch: {self.target_pitch} | Yaw: {self.target_yaw}", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
             print(f"> OBJETIVO DETECTADO < Área: {max_area}. Pitch: {self.target_pitch}, Yaw: {self.target_yaw}")
             
-        else:
-             # Si no hay nadie, quedarse quieto
-             if self.is_flying:
-                 cv2.putText(frame, "BUSCANDO PERSONA...", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 1)
+        # Dibujar HUD
+        mode_text = "MODO: AUTO (YOLO)" if self.auto_mode else "MODO: MANUAL (WASD)"
+        cv2.putText(frame, mode_text, (10, height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
         cv2.imshow("Webots YOLO Tracker", frame)
         cv2.waitKey(1)
         
     def run(self):
-        print("Iniciando Simulador. Pulsa 't' (en Webots) para despegar, 'l' para aterrizar.")
+        print("\n--- CONTROLES DEL SIMULADOR ---")
+        print("T: Despegar / Toggle AUTO Mode")
+        print("L: Aterrizar")
+        print("Manual: W/S (Avanzar), A/D (Lados), Q/E (Girar), Flechas Arriba/Abajo (Altura)")
+        print("-------------------------------\n")
         
         while self.step(self.time_step) != -1:
             # 1. Leer teclado
             key = self.keyboard.getKey()
-            if key == ord('T'): # Despegar
-                self.is_flying = True
-                self.target_altitude = 1.2
-                print("Despegando en Webots...")
-            elif key == ord('L'): # Aterrizar
+            
+            # Log de teclas para el usuario
+            if key != -1:
+                print(f"Tecla detectada: {key} ({chr(key) if 32 <= key <= 126 else 'Especial'})")
+
+            # Reset de consignas manuales
+            if not self.auto_mode:
+                self.target_pitch = 0.0
+                self.target_roll = 0.0
+                self.target_yaw = 0.0
+
+            if key == ord('T'): 
+                if not self.is_flying:
+                    self.is_flying = True
+                    self.target_altitude = 1.5 # Subimos a 1.5m
+                    print("COMANDO: Despegar -> Target 1.5m")
+                else:
+                    self.auto_mode = not self.auto_mode
+                    print(f"COMANDO: Toggle Auto Mode -> {'ON' if self.auto_mode else 'OFF'}")
+            elif key == ord('L'):
                 self.is_flying = False
                 self.target_altitude = 0.0
-                print("Aterrizando...")
+                self.auto_mode = False
+                print("COMANDO: Aterrizar -> Motores OFF")
+
+            # Teclas Manuales (solo si no estamos en auto)
+            if not self.auto_mode and self.is_flying:
+                if key == ord('W'): self.target_pitch = -0.6; print("Manual: Forward")
+                if key == ord('S'): self.target_pitch = 0.6; print("Manual: Backward")
+                if key == ord('A'): self.target_roll = -0.6; print("Manual: Left")
+                if key == ord('D'): self.target_roll = 0.6; print("Manual: Right")
+                if key == ord('Q'): self.target_yaw = 2.5; print("Manual: Yaw Left")
+                if key == ord('E'): self.target_yaw = -2.5; print("Manual: Yaw Right")
+                if key == Keyboard.UP: self.target_altitude += 0.1; print(f"Manual: Altitud UP -> {self.target_altitude:.2f}m")
+                if key == Keyboard.DOWN: self.target_altitude -= 0.1; print(f"Manual: Altitud DOWN -> {self.target_altitude:.2f}m")
                 
             # 2. Leer Sensores de Estabilización
             roll, pitch, yaw = self.imu.getRollPitchYaw()
-            altitude = self.gps.getValues()[1] # Asumiendo mundo donde Y o Z es arriba (Webots 2023+ usa Z para arriba, algunos dir usan Y)
-            # Para Mavic, Z suele ser altura. Ajustamos si hace falta.
-            gps_z = self.gps.getValues()[2] 
+            gps_values = self.gps.getValues()
             
-            # 3. Procesar Cámara y YOLO (cada X ms para no saturar)
+            # Webots 2023+ (Z es altura en mundos ENU, Y es altura en mundos FLU/NUE)
+            # Vamos a usar el valor más alto entre Y y Z como "altura" por seguridad
+            # Pero si Y o Z son negativos, no los queremos.
+            gps_z = max(0.01, gps_values[1], gps_values[2]) 
+            
+            # 3. Procesar Cámara y YOLO
             self.process_camera()
             
-            # 4. Estabilizar Dron (PID Físico)
+            # 4. Estabilizar Dron (PID FÍSICO - TRADUCCIÓN EXACTA DEL C)
             roll_velocity, pitch_velocity, yaw_velocity = self.gyro.getValues()
+            clamped_diff = max(-1.0, min(1.0, self.target_altitude - gps_z + K_VERTICAL_OFFSET))
+            vertical_input = K_VERTICAL_P * pow(clamped_diff, 3.0)
             
-            # Control de Altura (Clamping a tierra si aterrizado)
-            if not self.is_flying and gps_z < 0.1:
-                motor_base = 0.0
+            # Cálculo de INPUTS (CUIDADO con los signos para compensar el giro)
+            # En el C oficial: k_roll_p * roll + roll_velocity + roll_disturbance
+            # Si target_roll = 0 y roll > 0 (derecha abajo), obtenemos +roll_input -> FR y RR suben -> CORRIGE.
+            roll_input = K_ROLL_P * max(-1.0, min(1.0, roll - self.target_roll)) + roll_velocity + roll_disturbance
+            pitch_input = K_PITCH_P * max(-1.0, min(1.0, pitch - self.target_pitch)) + pitch_velocity + pitch_disturbance
+            yaw_input = yaw_disturbance
+            
+            # Mezclador de motores OFICIAL (Mavic 2 Pro)
+            if not self.is_flying and gps_z < 0.2:
+                m1 = m2 = m3 = m4 = 0.0
             else:
-                altitude_error = self.target_altitude - gps_z
-                motor_base = K_VERTICAL_THRUST + K_VERTICAL_P * altitude_error
-
-            # Ajustes PID Estabilización Base vs Targets de Visión
-            roll_input = K_ROLL_P * (self.target_roll if hasattr(self, 'target_roll') else 0.0 - roll) + roll_velocity
-            pitch_input = K_PITCH_P * (self.target_pitch - pitch) + pitch_velocity
-            yaw_input = self.target_yaw
+                m1 = K_VERTICAL_THRUST + vertical_input - roll_input + pitch_input - yaw_input
+                m2 = K_VERTICAL_THRUST + vertical_input + roll_input + pitch_input + yaw_input
+                m3 = K_VERTICAL_THRUST + vertical_input - roll_input - pitch_input + yaw_input
+                m4 = K_VERTICAL_THRUST + vertical_input + roll_input - pitch_input - yaw_input
             
-            # Mezclador de motores (Quadrotor en X)
-            m1 = motor_base - roll_input + pitch_input + yaw_input # Delantero Izq
-            m2 = motor_base + roll_input + pitch_input - yaw_input # Delantero Der
-            m3 = motor_base - roll_input - pitch_input - yaw_input # Trasero Izq
-            m4 = motor_base + roll_input - pitch_input + yaw_input # Trasero Der
-            
-            # Aplicar potencias
+            # Aplicar potencias (¡OJO!: Motores 2 y 3 van invertidos en Webots para este modelo)
             self.front_left_motor.setVelocity(self._clamp(m1))
-            self.front_right_motor.setVelocity(self._clamp(m2))
-            self.rear_left_motor.setVelocity(self._clamp(m3))
+            self.front_right_motor.setVelocity(self._clamp(-m2))
+            self.rear_left_motor.setVelocity(self._clamp(-m3))
             self.rear_right_motor.setVelocity(self._clamp(m4))
 
+            # Debug de motores (solo si estamos intentando volar pero no sube)
+            if self.is_flying and gps_z < 0.2 and self.getTime() % 2.0 < 0.1:
+                print(f"[DEBUG MOTORES] FL={m1:.1f}, FR={m2:.1f}, RL={m3:.1f}, RR={m4:.1f}")
+
     def _clamp(self, val):
-        MAX_SPEED = 600.0 # Mavic max speed constraint
+        MAX_SPEED = 600.0 # Volvemos al límite recomendado
         return max(-MAX_SPEED, min(MAX_SPEED, val))
 
 if __name__ == '__main__':
