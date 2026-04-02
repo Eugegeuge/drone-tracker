@@ -1,0 +1,13 @@
+\chapter{\label{objetivos}Objetivos}
+
+El objetivo principal de este trabajo es diseñar, simular y validar un sistema de control autónomo para un UAV capaz de realizar el seguimiento de una persona en tiempo real, optimizando la robustez de la detección y la suavidad del movimiento.
+
+Para alcanzar este objetivo general, se plantean los siguientes objetivos específicos:
+
+\begin{itemize}
+    \item \textbf{Configuración de un Entorno de Simulación Profesional (SITL):} Integrar ROS 2, PX4 Autopilot y Gazebo para validar los algoritmos de control de vuelo y percepción visual en un Gemelo Digital de alta fidelidad.
+    \item \textbf{Implementación de Detección mediante Deep Learning:} Integrar el modelo YOLOv8 para garantizar una detección de objetivos robusta frente a oclusiones y cambios de iluminación.
+    \item \textbf{Diseño de un Controlador PID Multidimensional:} Desarrollar y sintonizar un controlador que gestione el \textit{Yaw}, \textit{Altitude} y \textit{Pitch} del dron para un seguimiento fluido.
+    \item \textbf{Integración de Comunicaciones y Middleware:} Utilizar la arquitectura de nodos y tópicos de ROS 2, junto con Micro XRCE-DDS, para orquestar la comunicación de baja latencia entre el controlador de vuelo, la cámara simulada y el motor de inferencia.
+    \item \textbf{Evaluación y Validación Experimental:} Contrastar los resultados obtenidos en el simulador con pruebas de vuelo real, analizando errores de seguimiento y estabilidad.
+\end{itemize}

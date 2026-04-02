@@ -1,0 +1,112 @@
+% !TeX program = xelatex
+% !TeX root = TFG-TFM_EPS_UA.tex
+
+\input{include/configuracioninicial}
+
+% Título y subtítulo
+\newcommand{\titulo}{Título del Trabajo Fin de Grado/Máster}
+% Datos del autor
+\newcommand{\miNombre}{Nombre Apellido1 Apellido2 (alumno)}
+\newcommand{\miEmail}{nombre@alu.ua.es}
+% Datos del tutor/es
+\newcommand{\miTutor}{Nombre Apellido1 Apellido2 (tutor1)}
+\newcommand{\miTutorB}{Nombre Apellido1 Apellido2 (tutor2)}
+\newcommand{\departamentoTutor}{Departamento del tutor}
+\newcommand{\departamentoTutorB}{Departamento del cotutor}
+% Datos de la facultad y universidad
+\newcommand{\miFacultad}{Escuela Politécnica Superior}
+\newcommand{\miFacultadCorto}{EPS UA}
+\newcommand{\miUniversidad}{\protect{Universidad de Alicante}}
+\newcommand{\miUbicacion}{Alicante}
+
+% Información añadida a las propiedades del archivo PDF.
+\hypersetup{
+pdfauthor = {\miNombre~(\miEmail)},
+pdftitle = {\titulo},
+}
+
+% INDICA TU TITULACIÓN
+% ID	GRADO -------------------------------------------------
+% 1		Ingeniería en Imagen y Sonido en Telecomunicación
+% 2		Ingeniería Civil
+% 3		Ingeniería Química
+% 4		Ingeniería Informática
+% 5		Ingeniería Multimedia
+% 6		Arquitectura Técnica
+% 7		Arquitectura
+% 8		Robótica
+% %		%%%%%%%%%%%%
+% ID	MÁSTER ------------------------------------------------
+% A		Telecomunicación
+% B		Caminos, Canales y Puertos
+% C		Gestión en la Edificación
+% D		Desarrollo Web
+% E		Materiales, Agua, Terreno
+% F		Informática
+% G 	Automática y Robótica
+% H		Prevención de riesgos laborales
+% I		Gestión Sostenible Agua
+% J		Desarrollo Aplicaciones Móviles
+% K		Ingeniería Química
+% L		Ciberseguridad
+% M		Biomédica
+
+\def\IDtitulo{8} % INTRODUCE LA ID DE TU TITULACIÓN				
+
+% Configuración automática según el identificador elegido
+\input{include/configuraciontitulacion} 
+
+
+%%
+% Archivo de acrónimos
+%%
+\makeglossaries % Genera la base de datos de acrónimos
+\input{anexos/acronimos.tex} % Archivo que contiene los acrónimos
+
+\begin{document}
+
+% Números romanos hasta el mainmatter.
+\frontmatter
+
+% PORTADA
+\input{include/portada/portada_color} % Portada Color
+\input{include/portada/portada_bn} % Portada B/N
+
+%%%%% PREAMBULO
+% Incluye el .tex que contiene el preámbulo, agradecimientos y dedicatorias.
+\input{capitulos/preliminaresconagradecimientos} 
+
+% Incluye después del archivo anterior el indice y lista de figuras, tablas y códigos.
+\tableofcontents	% Índice
+\listoffigures		% Índice de figuras
+\listoftables		% Índice de tablas
+
+% Inicia la numeración habitual.
+\mainmatter
+
+%%%%
+% CONTENIDO. CAPÍTULOS DEL TRABAJO - Añade o elimina según tus necesidades
+%%%%
+\input{capitulos/Introduccion}	% Plantilla: Se muestran contenidos
+\input{capitulos/marcoteorico}	% Plantilla: Se muestran listas
+\input{capitulos/objetivos}		% Plantilla: Se muestran tablas
+\input{capitulos/metodologia}	% Plantilla: Se muestran figuras
+\input{capitulos/desarrollo}		% Plantilla: Se muestran listados
+\input{capitulos/resultados}		% Plantilla: Se muestran gráficas
+\input{capitulos/conclusiones}	% Plantilla: Se muestran matemáticas
+
+%%%%
+% CONTENIDO. BIBLIOGRAFÍA.
+%%%%
+\nocite{*} %incluye TODOS los documentos de la base de datos bibliográfica sean o no citados en el texto
+\bibliography{bibliografia/bibliografia} % Archivo que contiene la bibliografía
+\bibliographystyle{apacite}
+
+% Incluye el listado de acrónimos utilizados en el trabajo. 
+\printglossary[style=modsuper,typ%\input{include/estiloscodigoprogramacion.tex}
+e=\acronymtype,title={Lista de Acrónimos y Abreviaturas}]
+% Añade el resto de acrónimos si así se desea. Si no elimina el comando siguiente
+\glsaddallunused 
+
+
+\end{document}

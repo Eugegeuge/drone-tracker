@@ -1,0 +1,95 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="person">
+    <static>true</static>
+
+    <!-- Torso (blue shirt) -->
+    <link name="torso">
+      <pose>0 0 1.0 0 0 0</pose>
+      <visual name="torso_visual">
+        <geometry>
+          <box><size>0.4 0.25 0.6</size></box>
+        </geometry>
+        <material>
+          <ambient>0.2 0.2 0.8 1</ambient>
+          <diffuse>0.3 0.3 0.9 1</diffuse>
+        </material>
+      </visual>
+      <collision name="torso_collision">
+        <geometry>
+          <box><size>0.4 0.25 0.6</size></box>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Head (skin color) -->
+    <link name="head">
+      <pose>0 0 1.55 0 0 0</pose>
+      <visual name="head_visual">
+        <geometry>
+          <sphere><radius>0.15</radius></sphere>
+        </geometry>
+        <material>
+          <ambient>0.9 0.7 0.5 1</ambient>
+          <diffuse>0.95 0.75 0.55 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <!-- Left Leg (dark pants) -->
+    <link name="left_leg">
+      <pose>0.0 -0.08 0.4 0 0 0</pose>
+      <visual name="left_leg_visual">
+        <geometry>
+          <box><size>0.15 0.15 0.8</size></box>
+        </geometry>
+        <material>
+          <ambient>0.3 0.3 0.3 1</ambient>
+          <diffuse>0.4 0.4 0.4 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <!-- Right Leg -->
+    <link name="right_leg">
+      <pose>0.0 0.08 0.4 0 0 0</pose>
+      <visual name="right_leg_visual">
+        <geometry>
+          <box><size>0.15 0.15 0.8</size></box>
+        </geometry>
+        <material>
+          <ambient>0.3 0.3 0.3 1</ambient>
+          <diffuse>0.4 0.4 0.4 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <!-- Left Arm (skin) -->
+    <link name="left_arm">
+      <pose>0.0 -0.25 1.05 0 0 0</pose>
+      <visual name="left_arm_visual">
+        <geometry>
+          <box><size>0.1 0.1 0.5</size></box>
+        </geometry>
+        <material>
+          <ambient>0.9 0.7 0.5 1</ambient>
+          <diffuse>0.95 0.75 0.55 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <!-- Right Arm -->
+    <link name="right_arm">
+      <pose>0.0 0.25 1.05 0 0 0</pose>
+      <visual name="right_arm_visual">
+        <geometry>
+          <box><size>0.1 0.1 0.5</size></box>
+        </geometry>
+        <material>
+          <ambient>0.9 0.7 0.5 1</ambient>
+          <diffuse>0.95 0.75 0.55 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

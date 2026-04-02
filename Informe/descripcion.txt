@@ -1,0 +1,32 @@
+=== IDEAS Y CONTENIDO EXTRAÍDO DEL GITHUB (drone-tracker) ===
+
+1. OBJETIVOS DEL TRABAJO:
+- Diseñar e implementar un sistema de seguimiento autónomo en tiempo real usando el dron DJI Tello.
+- Integración de visión artificial mediante OpenCV (detección de objetivos).
+- Desarrollo de lógica de control en Python para reacción al movimiento.
+- Optimización de recursos (hardware low-cost y código abierto).
+
+2. ESTADO DEL ARTE (Puntos clave):
+- Robótica de servicio: asistencia en tareas cotidianas, interacción flexible.
+- Tecnologías de visión: Deep Learning, Redes Neuronales Convolucionales (CNN).
+- Arquitecturas ligeras: MobileNetV2 (eficiente para sistemas embebidos).
+- Middleware: ROS (Robot Operating System) para modularidad y comunicación por nodos (protocolo Rosserial).
+
+3. JUSTIFICACIÓN TÉCNICA:
+- Dron DJI Tello: Bajo coste, abstracción de hardware (API Python), ideal para educación.
+- Procesamiento en PC: Mayor capacidad computacional para IA en tiempo real frente a sistemas embebidos.
+- Modularidad: Scripts independientes en Python para fácil depuración.
+
+4. PRESUPUESTO ESTIMADO (~184€):
+- DJI Tello: 109€
+- Batería extra: 25€
+- Hub de carga: 20€
+- Protectores: 10€
+- Repetidor Wi-Fi: 20€
+
+=== NOTAS SOBRE LA PLANTILLA LATEX (EPS-UA) ===
+- Archivo principal: TFG-TFM_EPS_UA.tex (aquí se configuran los datos del autor, título e ID de titulación).
+- Configuración: include/configuracioninicial.tex (paquetes y estilos) e include/configuraciontitulacion.tex (logos y colores según el ID).
+- Capítulos: Se encuentran en la carpeta 'capitulos/'. Cada archivo .tex corresponde a una sección.
+- Bibliografía: El archivo es bibliografia/bibliografia.bib.
+- Acrónimos: Se gestionan en anexos/acronimos.tex.

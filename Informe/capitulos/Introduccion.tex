@@ -1,0 +1,23 @@
+\chapter{Introducción}
+
+En la última década, los Vehículos Aéreos No Tripulados (UAVs, por sus siglas en inglés), comúnmente conocidos como drones, han experimentado un crecimiento exponencial, trascendiendo sus aplicaciones iniciales para integrarse en sectores como la inspección industrial, la agricultura de precisión, la cinematografía y las misiones de búsqueda y rescate. Inicialmente, el manejo de estos dispositivos dependía de la teleoperación directa mediante un piloto humano, lo que limitaba su escalabilidad y exigía una alta especialización.
+
+Sin embargo, la convergencia entre la robótica aérea y la Inteligencia Artificial ha marcado un cambio de paradigma hacia la autonomía. En particular, la aplicación de técnicas de Visión Artificial ha dotado a estos sistemas de la capacidad de percibir, interpretar e interactuar con su entorno de forma dinámica. Dentro de este campo, el seguimiento autónomo de objetivos (\textit{Object Tracking} y \textit{Follow-me}) se ha consolidado como una de las funcionalidades más demandadas y complejas.
+
+El presente Trabajo de Fin de Grado aborda este desafío tecnológico mediante el diseño, simulación e implementación de un sistema de seguimiento autónomo de personas en tiempo real. Utilizando un dron comercial de bajo coste y arquitectura abierta para el control (DJI Tello), se propone una solución integral que abarca desde la detección visual del objetivo mediante redes neuronales convolucionales hasta la ejecución de algoritmos de control de vuelo para mantener una posición y distancia relativas constantes.
+
+\section{Motivación y Justificación Técnica}
+
+La principal motivación de este proyecto radica en la democratización y apertura de las tecnologías de seguimiento aéreo. En el panorama actual del mercado de los drones, las capacidades de seguimiento autónomo (como el \textit{ActiveTrack} de los modelos de gama alta) están restringidas a equipos de alto coste económico. Además, estos sistemas suelen operar como "cajas negras" con software propietario, lo que impide a la comunidad investigadora y educativa modificar, optimizar o auditar los algoritmos subyecentes.
+
+Implementar este sistema en un dron de bajo coste presenta un desafío de ingeniería significativo por las siguientes razones:
+
+\begin{itemize}
+    \item \textbf{Superación de limitaciones de hardware mediante software robusto:} A diferencia de drones profesionales, el DJI Tello carece de unidades de procesamiento neuronal a bordo (\textit{Edge Computing}) y de sensores de evasión de obstáculos. Esto obliga a derivar el cómputo (procesamiento de imagen y cálculo de trayectorias) a una estación base, enfrentándose a retos críticos como la latencia de red, la pérdida de paquetes de vídeo y la deriva (\textit{drift}) inercial del dispositivo.
+    
+    \item \textbf{Evolución del estado del arte en Visión Artificial:} Tradicionalmente, la detección en sistemas de bajos recursos se ha apoyado en algoritmos clásicos como \textit{Haar Cascades}. Aunque eficientes, son susceptibles a cambios de iluminación y oclusiones. Este proyecto se motiva en la transición hacia arquitecturas de \textit{Deep Learning} de última generación, como \textbf{YOLOv8}, que permiten inferencias en tiempo real con una robustez drásticamente superior.
+    
+    \item \textbf{Aplicación práctica de la Teoría de Control:} El seguimiento fluido requiere la transición de una lógica de control proporcional básica a un \textbf{controlador PID} (Proporcional-Integral-Derivado) multidimensional. Esto permite amortiguar oscilaciones, anticipar movimientos y compensar errores acumulados, aplicando de forma directa los conocimientos troncales de la Ingeniería Robótica.
+    
+    \item \textbf{Adopción de Arquitecturas Estándar de la Industria:} La transición hacia un entorno de simulación profesional basado en ROS 2, PX4 Autopilot y Gazebo no solo protege el hardware físico, sino que aplica metodologías de vanguardia como la validación \textit{Software-in-the-Loop} (SITL). Esto permite testear la lógica de vuelo y visión en un Gemelo Digital (\textit{Digital Twin}) de gran fidelidad física antes del despliegue real.
+\end{itemize}

@@ -2,3 +2,4 @@ ultralytics
 djitellopy
 opencv-python
 numpy
+mediapipe

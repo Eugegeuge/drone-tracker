@@ -1,0 +1,13 @@
+name: custom_tmux
+root: /root
+
+windows:
+  - simulation:
+      layout: tiled
+      panes:
+        - cd /root/Micro-XRCE-DDS-Agent && MicroXRCEAgent udp4 -p 8888
+        - sleep 3 && cd /root/PX4-Autopilot && PX4_SYS_AUTOSTART=4002 PX4_GZ_MODEL_POSE="268.08,-128.22,3.86,0.00,0,-0.7" PX4_GZ_MODEL=x500_depth ./build/px4_sitl_default/bin/px4
+        - sleep 15 && gz service -s /world/default/create --reqtype gz.msgs.EntityFactory --reptype gz.msgs.Boolean --timeout 5000 --req 'sdf_filename:"/root/person_model.sdf", name:"person", pose:{position:{x:275, y:-128, z:3.86}}'
+        - sleep 10 && ros2 run ros_gz_bridge parameter_bridge /world/default/model/x500_depth_0/link/camera_link/sensor/IMX214/image@sensor_msgs/msg/Image[gz.msgs.Image --ros-args -r /world/default/model/x500_depth_0/link/camera_link/sensor/IMX214/image:=/camera
+        - sleep 15 && cd /root/PX4-ROS2-Gazebo-YOLOv8 && python3 uav_camera_det.py
+        - sleep 20 && cd /root/PX4-ROS2-Gazebo-YOLOv8 && python3 keyboard-mavsdk-test.py

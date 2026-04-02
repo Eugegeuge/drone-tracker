@@ -1,0 +1,44 @@
+\chapter{\label{desarrollo}Desarrollo}
+
+En este capítulo se detalla el proceso de diseño, implementación y validación de los algoritmos de detección y seguimiento de personas. Se describe la evolución desde las primeras pruebas en entornos simulados hasta la integración de sistemas de visión avanzada.
+
+\section{Primera Iteración: Simulación en Webots con YOLOv8-Pose}
+\label{sec:primera_simulacion_webots}
+
+Como fase inicial en el desarrollo de los algoritmos de detección y seguimiento autónomo, se ha implementado una primera simulación utilizando el entorno \textit{Webots}. Esta herramienta permite un modelado 3D fotorrealista y una física precisa, lo que resulta fundamental para validar la lógica de control antes de su despliegue en hardware real o simuladores más complejos.
+
+Es importante destacar que esta implementación representa la \textbf{primera iteración} de una serie de pruebas planeadas para perfeccionar el sistema de seguimiento de personas.
+
+\subsection{Configuración del Entorno y Modelo de Dron}
+
+Para esta simulación se ha seleccionado el modelo comercial \texttt{DJI Mavic 2 Pro} disponible en la biblioteca de Webots. Aunque el controlador base proporcionado por el simulador está escrito en C, se ha procedido a portar íntegramente la lógica de control a \textbf{Python}. Esta decisión estratégica facilita la integración directa con bibliotecas de visión artificial y aprendizaje profundo (\textit{deep learning}), además de proporcionar una mayor flexibilidad para la implementación de algoritmos personalizados.
+
+El entorno de pruebas consiste en un mundo 3D controlado donde un peatón (\textit{pedestrian}) realiza un recorrido circular de forma autónoma. Este escenario simplificado permite aislar variables y evaluar la precisión del seguimiento ante cambios constantes de orientación del objetivo.
+
+\subsection{Estrategia de Detección y Seguimiento: YOLOv8-Pose}
+
+En lugar de utilizar una detección de objetos estándar basada en cajas delimitadoras (\textit{bounding boxes}), que suelen presentar inestabilidad y "ruido" ante los movimientos naturales de las extremidades del ser humano, se ha optado por utilizar el modelo \textbf{YOLOv8-Pose} (\texttt{yolov8n-pose.pt}). 
+
+La ventaja principal de este enfoque es la capacidad de extraer los puntos clave (\textit{keypoints}) del esqueleto humano en tiempo real. Para lograr un seguimiento estable, el algoritmo calcula el punto medio entre los hombros (puntos clave 5 y 6 del modelo) para determinar un "centro de masa" virtual en el torso del objetivo. Este punto de referencia es significativamente más robusto frente a oclusiones parciales o cambios bruscos en la postura del sujeto que el centro de una caja delimitadora.
+
+\subsection{Lógica de Control y Optimización}
+
+El sistema de control implementado consiste en un controlador proporcional-derivativo (\gls{pd}) basado en visión. Este controlador calcula el error entre la posición del objetivo en el frame y el centro de la imagen, ajustando dinámicamente los siguientes parámetros de vuelo del \gls{uav}:
+\begin{itemize}
+    \item \textit{Yaw} (guiñada): Para rotar el dron y mantener al sujeto centrado horizontalmente.
+    \item \textit{Pitch} (cabeceo): Para avanzar o retroceder, manteniendo una distancia de seguridad constante.
+    \item \textit{Altitud}: Para ajustar la altura del dron respecto al torso del objetivo.
+\end{itemize}
+
+Para asegurar un rendimiento óptimo y evitar problemas de latencia (\textit{lag}) que podrían desestabilizar el vuelo, se han aplicado las siguientes optimizaciones:
+\begin{itemize}
+    \item \textbf{Salto de fotogramas (\textit{Frame-skipping}):} Se procesa únicamente 1 fotograma por cada 5 pasos de simulación. Esto reduce drásticamente la carga computacional sin comprometer la estabilidad del seguimiento.
+    \item \textbf{Umbral de confianza:} Por seguridad, el sistema solo activa los comandos de seguimiento si la confianza de la detección de los \textit{keypoints} es superior a 0,70. En caso de pérdida de señal o baja confianza, el dron entra automáticamente en estado de vuelo estacionario (\textit{hovering}).
+\end{itemize}
+
+% \begin{figure}[htbp]
+%     \centering
+%     \includegraphics[width=0.8\textwidth]{assets/webots_sim_screenshot.png}
+%     \caption{Captura de la simulación en Webots mostrando el seguimiento del peatón mediante YOLOv8-Pose.}
+%     \label{fig:webots_sim}
+% \end{figure}
