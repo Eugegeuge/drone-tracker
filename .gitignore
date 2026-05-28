@@ -10,4 +10,5 @@ share/
 Include/
 Lib/
 Scripts/
-yolov8n.pt
+*.pt
+*backup*
